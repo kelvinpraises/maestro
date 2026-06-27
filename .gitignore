@@ -1,0 +1,19 @@
+node_modules/
+target/
+dist/
+out/
+.env
+*.local
+.DS_Store
+*.db
+
+# design reference dump (kept local only)
+Hackathon Projects/
+
+# needed by builds despite the generic rules above:
+# proving artifacts (vkey embedded at compile time, zkey/wasm used by the prover)
+!circuits/out/
+!circuits/out/**
+# wdk-4337 build stub ships its dist
+!apps/packages/wdk-4337/dist/
+!apps/packages/wdk-4337/dist/**
