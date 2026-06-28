@@ -1,0 +1,28 @@
+[package]
+name = "groth16-verifier"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["lib", "cdylib"]
+doctest = false
+
+[dependencies]
+contract-types = { workspace = true }
+soroban-sdk = { workspace = true, features = ["alloc"] }
+
+# Build script: parse the snarkjs verification_key.json and embed it as bytes.
+[build-dependencies]
+ark-bn254 = { workspace = true }
+ark-ff = { workspace = true }
+num-bigint = { workspace = true }
+serde_json = { workspace = true, features = ["std"] }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
+
+[lints]
+workspace = true
