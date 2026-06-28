@@ -1,0 +1,39 @@
+[workspace]
+resolver = "3"
+members = ["types", "groth16_verifier", "zwerc20", "drips", "yield_manager"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+repository = "https://github.com/kelvinpraises/maestro"
+
+[workspace.dependencies]
+# workspace crates
+contract-types = { path = "types" }
+groth16-verifier = { path = "groth16_verifier" }
+
+# soroban
+soroban-sdk = { version = "26", default-features = false, features = ["hazmat"] }
+
+# host-side (build scripts / tests only)
+ark-bn254 = { version = "0.6.0", default-features = false, features = ["curve"] }
+ark-ff = { version = "0.6.0", default-features = false }
+ark-groth16 = { version = "0.6.0", default-features = false }
+ark-serialize = { version = "0.6.0", default-features = false }
+num-bigint = { version = "0.4.6", default-features = false }
+serde_json = { version = "1", default-features = false }
+
+[workspace.lints.rust]
+missing_docs = "allow"
+
+[profile.release]
+opt-level = "z"
+overflow-checks = true
+debug = 0
+strip = "symbols"
+debug-assertions = false
+panic = "abort"
+codegen-units = 1
+lto = true

@@ -1,0 +1,6 @@
+# Embed the Groth16 verification key (exported from remint_final.zkey) into the
+# verifier contract at build time, so `cargo test`/`build` work without passing
+# VERIFIER_VK_JSON manually. Path is relative to this file's parent dir's parent
+# (Maestro/contracts) -> Maestro/circuits/out/verification_key.json.
+[env]
+VERIFIER_VK_JSON = { value = "../circuits/out/verification_key.json", relative = true }
