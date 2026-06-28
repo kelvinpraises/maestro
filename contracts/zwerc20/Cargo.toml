@@ -1,0 +1,23 @@
+[package]
+name = "zwerc20"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["lib", "cdylib"]
+doctest = false
+
+[dependencies]
+contract-types = { workspace = true }
+soroban-sdk = { workspace = true, features = ["alloc"] }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
+# The deployed verifier contract, for the end-to-end remint proof test.
+groth16-verifier = { workspace = true }
+
+[lints]
+workspace = true
