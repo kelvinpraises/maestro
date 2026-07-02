@@ -99,10 +99,14 @@ pub enum StreamsKey {
 // ───────────────────────── storage helpers ─────────────────────────
 
 pub fn init(env: &Env, cycle_secs: u64) {
+    let store = env.storage().instance();
+    if store.has(&StreamsKey::CycleSecs) {
+        panic!("already initialized");
+    }
     if cycle_secs <= 1 {
         panic!("cycle_secs must be > 1");
     }
-    env.storage().instance().set(&StreamsKey::CycleSecs, &cycle_secs);
+    store.set(&StreamsKey::CycleSecs, &cycle_secs);
 }
 
 pub fn cycle_secs(env: &Env) -> u64 {

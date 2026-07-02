@@ -192,4 +192,17 @@ mod test {
         assert_eq!(coin.balance(&kid), 30);
         assert_eq!(coin.balance(&id), 470);
     }
+
+    /// Init is one-time: a second call must not be able to re-key the global
+    /// cycle length out from under existing delta accounting.
+    #[test]
+    #[should_panic(expected = "already initialized")]
+    fn double_init_panics() {
+        let env = Env::default();
+        let id = env.register(Drips, ());
+        let client = DripsClient::new(&env, &id);
+
+        client.init(&10);
+        client.init(&10);
+    }
 }
