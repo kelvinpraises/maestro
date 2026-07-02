@@ -54,29 +54,30 @@ fn remint_e2e_pays_recipient_and_blocks_replay() {
     let z = Zwerc20Client::new(&env, &zid);
     z.init(&admin, &token, &vid);
 
-    // A depositor funds the pool and inserts the note's commitment.
+    // A parent funds the treasury; the contract computes the claim commitment
+    // itself as `Poseidon(addr20, amount)` from the deposited amount.
     let depositor = Address::generate(&env);
-    token_admin.mint(&depositor, &1_000_000);
-    let commitment = u256(&env, &fx::COMMITMENT);
-    z.deposit(&depositor, &commitment, &1_000_000);
+    token_admin.mint(&depositor, &fx::AMOUNT);
+    let addr20 = u256(&env, &fx::ADDR20);
+    z.deposit(&depositor, &addr20, &fx::AMOUNT);
 
     // The on-chain root now equals the root the proof was generated against.
     assert_eq!(z.current_root(), u256(&env, &fx::ROOT));
 
-    // The recipient withdraws privately via the real proof.
-    let to = Address::generate(&env);
+    // The pinned recipient (matching the proof's `to` public signal, which the
+    // contract re-derives on-chain) claims the reward with the real proof.
+    let to = Address::from_string(&soroban_sdk::String::from_str(&env, fx::TO_STRKEY));
     let root = u256(&env, &fx::PUBLIC_SIGNALS[0]);
     let nullifier = u256(&env, &fx::PUBLIC_SIGNALS[1]);
-    let to_field = u256(&env, &fx::PUBLIC_SIGNALS[2]);
     let relayer_fee = u256(&env, &fx::PUBLIC_SIGNALS[6]);
     let proof = Bytes::from_array(&env, &fx::PROOF);
 
-    z.remint(&to, &to_field, &1_000_000, &root, &nullifier, &relayer_fee, &proof);
+    z.remint(&to, &fx::AMOUNT, &root, &nullifier, &relayer_fee, &proof);
 
-    assert_eq!(TokenClient::new(&env, &token).balance(&to), 1_000_000);
+    assert_eq!(TokenClient::new(&env, &token).balance(&to), fx::AMOUNT);
     assert!(z.is_nullifier_used(&nullifier));
 
     // Replay with the same nullifier must be rejected.
-    let replay = z.try_remint(&to, &to_field, &1_000_000, &root, &nullifier, &relayer_fee, &proof);
+    let replay = z.try_remint(&to, &fx::AMOUNT, &root, &nullifier, &relayer_fee, &proof);
     assert!(replay.is_err(), "nullifier replay must be rejected");
 }

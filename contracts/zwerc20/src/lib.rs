@@ -16,7 +16,7 @@
 use soroban_sdk::{
     contract, contractclient, contractimpl, contracttype,
     crypto::bn254::Bn254Fr,
-    token, vec, Address, Bytes, BytesN, Env, U256, Vec,
+    token, vec, xdr::ToXdr, Address, Bytes, BytesN, Env, U256, Vec,
 };
 
 use contract_types::{Groth16Error, Groth16Proof};
@@ -67,10 +67,16 @@ impl Zwerc20 {
         merkle::init(&env);
     }
 
-    /// Deposit `amount` of the underlying asset into the pool and insert the
-    /// caller-computed commitment (`Poseidon(addr20, amount)`) into the tree.
-    /// Returns the leaf index.
-    pub fn deposit(env: Env, from: Address, commitment: U256, amount: i128) -> u32 {
+    /// Deposit `amount` of the underlying asset into the treasury and insert the
+    /// claim commitment (`Poseidon(addr20, amount)`) into the tree. Returns the
+    /// leaf index.
+    ///
+    /// The contract computes the commitment itself from `addr20` and `amount`
+    /// rather than trusting a caller-supplied leaf: the circuit builds the same
+    /// leaf as `Poseidon(addr20, commitAmount)` (see `remint.circom`), so binding
+    /// the leaf to the deposited `amount` here is what stops a funder from
+    /// committing to a claim worth more than they paid in.
+    pub fn deposit(env: Env, from: Address, addr20: U256, amount: i128) -> u32 {
         from.require_auth();
         let token = Self::underlying(env.clone());
         token::TokenClient::new(&env, &token).transfer(
@@ -78,24 +84,26 @@ impl Zwerc20 {
             &env.current_contract_address(),
             &amount,
         );
+        let commitment = poseidon::hash2(&env, &addr20, &U256::from_u128(&env, amount as u128));
         merkle::insert(&env, commitment)
     }
 
-    /// Withdraw a note from the pool to a real Stellar `Address` by proving
-    /// membership + nullifier with the reused remint circuit (redeem path).
+    /// Pay out a claim from the treasury to a real Stellar `Address` by proving
+    /// family membership + claim token with the reused remint circuit (redeem
+    /// path).
     ///
     /// Public signals match `ISnarkVerifier`:
     /// `[root, nullifier, to, amount, id, redeem, relayerFee]` with `id = 0`
     /// and `redeem = 1`.
     ///
-    /// `to_field` is the field-encoding of `to` used when the proof was
-    /// generated. TODO(hardening): derive `to_field` on-chain from `to`
-    /// (`sha256` of its XDR) to bind the recipient against relayer
-    /// front-running, as Nethermind's pool binds via `ext_data_hash`.
+    /// The circuit's `to` public input is the field-encoding of the recipient.
+    /// We derive it on-chain from the real `to` (see [`to_field`]) rather than
+    /// accept it as a caller parameter, so a relayer cannot reuse a valid proof
+    /// with a different recipient and redirect the payout — the encoding is the
+    /// convention the client prover MUST replicate.
     pub fn remint(
         env: Env,
         to: Address,
-        to_field: U256,
         amount: i128,
         root: U256,
         nullifier: U256,
@@ -108,6 +116,8 @@ impl Zwerc20 {
         if nullifier::is_used(&env, &nullifier) {
             panic!("nullifier already used");
         }
+
+        let to_field = to_field(&env, &to);
 
         let inputs: Vec<Bn254Fr> = vec![
             &env,
@@ -164,4 +174,26 @@ fn fr(env: &Env, v: &U256) -> Bn254Fr {
     let mut buf = [0u8; 32];
     v.to_be_bytes().copy_into_slice(&mut buf);
     Bn254Fr::from_bytes(BytesN::from_array(env, &buf))
+}
+
+/// Canonical field-encoding of a recipient `Address` for the remint circuit's
+/// `to` public input:
+///
+/// `to_field = sha256(to.to_xdr()) mod r`
+///
+/// where `r` is the BN254 scalar field order and the 32-byte digest is read
+/// big-endian. Because the digest is 256 bits and `r` is ~254 bits, it can
+/// exceed `r`, so we reduce. The client prover MUST derive the circuit's `to`
+/// input the same way for the proof to verify.
+fn to_field(env: &Env, to: &Address) -> U256 {
+    // BN254 scalar field modulus r (big-endian).
+    const R_BE: [u8; 32] = [
+        0x30, 0x64, 0x4e, 0x72, 0xe1, 0x31, 0xa0, 0x29, 0xb8, 0x50, 0x45, 0xb6, 0x81, 0x81, 0x58,
+        0x5d, 0x28, 0x33, 0xe8, 0x48, 0x79, 0xb9, 0x70, 0x91, 0x43, 0xe1, 0xf5, 0x93, 0xf0, 0x00,
+        0x00, 0x01,
+    ];
+    let digest = env.crypto().sha256(&to.clone().to_xdr(env));
+    let value = U256::from_be_bytes(env, &Bytes::from(digest));
+    let r = U256::from_be_bytes(env, &Bytes::from_array(env, &R_BE));
+    value.rem_euclid(&r)
 }
