@@ -18,6 +18,7 @@ import { Route as ContactsRouteImport } from './app/contacts'
 import { Route as IndexRouteImport } from './app/index'
 import { Route as YieldboxIndexRouteImport } from './app/yieldbox/index'
 import { Route as StreamsIndexRouteImport } from './app/streams/index'
+import { Route as RewardsIndexRouteImport } from './app/rewards/index'
 import { Route as CirclesIndexRouteImport } from './app/circles/index'
 import { Route as StreamsStreamIdRouteImport } from './app/streams/$streamId'
 import { Route as OauthAuthorizeRouteImport } from './app/oauth/authorize'
@@ -70,6 +71,11 @@ const StreamsIndexRoute = StreamsIndexRouteImport.update({
   path: '/streams/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RewardsIndexRoute = RewardsIndexRouteImport.update({
+  id: '/rewards/',
+  path: '/rewards/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CirclesIndexRoute = CirclesIndexRouteImport.update({
   id: '/circles/',
   path: '/circles/',
@@ -115,6 +121,7 @@ export interface FileRoutesByFullPath {
   '/oauth/authorize': typeof OauthAuthorizeRoute
   '/streams/$streamId': typeof StreamsStreamIdRoute
   '/circles/': typeof CirclesIndexRoute
+  '/rewards/': typeof RewardsIndexRoute
   '/streams/': typeof StreamsIndexRoute
   '/yieldbox/': typeof YieldboxIndexRoute
 }
@@ -132,6 +139,7 @@ export interface FileRoutesByTo {
   '/oauth/authorize': typeof OauthAuthorizeRoute
   '/streams/$streamId': typeof StreamsStreamIdRoute
   '/circles': typeof CirclesIndexRoute
+  '/rewards': typeof RewardsIndexRoute
   '/streams': typeof StreamsIndexRoute
   '/yieldbox': typeof YieldboxIndexRoute
 }
@@ -150,6 +158,7 @@ export interface FileRoutesById {
   '/oauth/authorize': typeof OauthAuthorizeRoute
   '/streams/$streamId': typeof StreamsStreamIdRoute
   '/circles/': typeof CirclesIndexRoute
+  '/rewards/': typeof RewardsIndexRoute
   '/streams/': typeof StreamsIndexRoute
   '/yieldbox/': typeof YieldboxIndexRoute
 }
@@ -169,6 +178,7 @@ export interface FileRouteTypes {
     | '/oauth/authorize'
     | '/streams/$streamId'
     | '/circles/'
+    | '/rewards/'
     | '/streams/'
     | '/yieldbox/'
   fileRoutesByTo: FileRoutesByTo
@@ -186,6 +196,7 @@ export interface FileRouteTypes {
     | '/oauth/authorize'
     | '/streams/$streamId'
     | '/circles'
+    | '/rewards'
     | '/streams'
     | '/yieldbox'
   id:
@@ -203,6 +214,7 @@ export interface FileRouteTypes {
     | '/oauth/authorize'
     | '/streams/$streamId'
     | '/circles/'
+    | '/rewards/'
     | '/streams/'
     | '/yieldbox/'
   fileRoutesById: FileRoutesById
@@ -221,6 +233,7 @@ export interface RootRouteChildren {
   OauthAuthorizeRoute: typeof OauthAuthorizeRoute
   StreamsStreamIdRoute: typeof StreamsStreamIdRoute
   CirclesIndexRoute: typeof CirclesIndexRoute
+  RewardsIndexRoute: typeof RewardsIndexRoute
   StreamsIndexRoute: typeof StreamsIndexRoute
   YieldboxIndexRoute: typeof YieldboxIndexRoute
 }
@@ -290,6 +303,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StreamsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/rewards/': {
+      id: '/rewards/'
+      path: '/rewards'
+      fullPath: '/rewards/'
+      preLoaderRoute: typeof RewardsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/circles/': {
       id: '/circles/'
       path: '/circles'
@@ -349,6 +369,7 @@ const rootRouteChildren: RootRouteChildren = {
   OauthAuthorizeRoute: OauthAuthorizeRoute,
   StreamsStreamIdRoute: StreamsStreamIdRoute,
   CirclesIndexRoute: CirclesIndexRoute,
+  RewardsIndexRoute: RewardsIndexRoute,
   StreamsIndexRoute: StreamsIndexRoute,
   YieldboxIndexRoute: YieldboxIndexRoute,
 }

@@ -14,7 +14,7 @@ const items: NavItem[] = [
     to: "/dashboard",
     label: "Quests",
     icon: ScrollText,
-    match: (p) => p === "/dashboard" || p.startsWith("/streams") || p.startsWith("/history"),
+    match: (p) => p === "/dashboard" || p.startsWith("/streams") || p.startsWith("/rewards") || p.startsWith("/history"),
   },
   {
     to: "/yieldbox",

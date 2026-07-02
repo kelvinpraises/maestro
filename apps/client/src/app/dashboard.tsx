@@ -1,11 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Bell, Sparkles, Bed, Trash2, Utensils, Dog, PiggyBank, ChevronRight } from "lucide-react";
+import { Bell, Sparkles, Bed, Trash2, Utensils, Dog, PiggyBank, ChevronRight, Gift } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { WelcomeDialog } from "@/components/organisms/welcome-dialog";
 import { EarningsHero } from "@/components/organisms/earnings-hero";
 import { QuestCard, type QuestTint, type QuestStatus } from "@/components/molecules/quest-card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/atoms/avatar";
 import { useStellarWallet } from "@/providers/stellar-wallet-provider";
+import { useMyRewards } from "@/hooks/use-rewards";
 import { zwerc20 } from "@/contracts/stellar";
 
 export const Route = createFileRoute("/dashboard")({
@@ -74,6 +75,10 @@ function DashboardPage() {
   const quests = SAMPLE_QUESTS;
   const questsLeft = quests.filter((q) => q.status !== "done").length;
 
+  // Private rewards waiting to be claimed (notes on this device, unspent).
+  const rewards = useMyRewards();
+  const claimableCount = (rewards.data ?? []).filter((r) => !r.claimed).length;
+
   return (
     <div className="stagger-rise space-y-5">
       <WelcomeDialog />
@@ -132,6 +137,33 @@ function DashboardPage() {
             {stashGoalTarget.toFixed(0)} XLM
           </span>
         </span>
+        <ChevronRight className="size-5 text-muted-foreground" strokeWidth={2.6} />
+      </button>
+
+      {/* Rewards mini-card → private-claim flow */}
+      <button
+        type="button"
+        onClick={() => navigate({ to: "/rewards" })}
+        className="animate-pop-in flex w-full items-center gap-3 rounded-3xl border border-border/60 bg-card p-4 text-left shadow-sm transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-md active:scale-[0.99]"
+      >
+        <span className="flex size-11 items-center justify-center rounded-2xl bg-m-purple/12 text-xl shadow-sm">
+          <Gift className="size-5 text-m-purple" strokeWidth={2.4} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-muted-foreground">
+            Rewards
+          </p>
+          <p className="font-display text-xl font-extrabold">
+            {claimableCount > 0
+              ? `${claimableCount} ready to claim`
+              : "Fund a private reward"}
+          </p>
+        </div>
+        {claimableCount > 0 && (
+          <span className="rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-extrabold text-m-green-ink">
+            {claimableCount}
+          </span>
+        )}
         <ChevronRight className="size-5 text-muted-foreground" strokeWidth={2.6} />
       </button>
 
