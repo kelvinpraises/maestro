@@ -14,7 +14,7 @@
 //!   Stellar `Address` (redeem path).
 
 use soroban_sdk::{
-    contract, contractclient, contractimpl, contracttype,
+    contract, contractclient, contractevent, contractimpl, contracttype,
     crypto::bn254::Bn254Fr,
     token, vec, xdr::ToXdr, Address, Bytes, BytesN, Env, U256, Vec,
 };
@@ -30,6 +30,8 @@ mod poseidon_t3;
 mod remint_fixture;
 #[cfg(test)]
 mod test_remint;
+#[cfg(test)]
+mod test_storage;
 
 #[contracttype]
 #[derive(Clone)]
@@ -37,6 +39,33 @@ pub enum ConfigKey {
     Admin,
     Underlying,
     Verifier,
+}
+
+/// Max leaves returned by a single [`Zwerc20::leaves`] call, so a range read
+/// stays cheap regardless of tree size. Clients paginate for the full tree.
+const MAX_LEAVES_PER_READ: u32 = 100;
+
+/// Emitted on `deposit`, for an off-chain indexer rebuilding deposit history
+/// and the Merkle tree. Topic: `("deposit",)`. The commitment hides `addr20`,
+/// so publishing it leaks nothing beyond what the public underlying transfer
+/// already reveals.
+#[contractevent(topics = ["deposit"])]
+#[derive(Clone)]
+pub struct DepositEvent {
+    pub index: u32,
+    pub commitment: U256,
+    pub new_root: U256,
+    pub amount: i128,
+}
+
+/// Emitted on `remint`, for an off-chain indexer following payout history.
+/// Topic: `("claim",)`.
+#[contractevent(topics = ["claim"])]
+#[derive(Clone)]
+pub struct ClaimEvent {
+    pub nullifier: U256,
+    pub to: Address,
+    pub amount: i128,
 }
 
 /// Cross-contract interface to the deployed Groth16 verifier (by address).
@@ -85,7 +114,16 @@ impl Zwerc20 {
             &amount,
         );
         let commitment = poseidon::hash2(&env, &addr20, &U256::from_u128(&env, amount as u128));
-        merkle::insert(&env, commitment)
+        let index = merkle::insert(&env, commitment.clone());
+
+        DepositEvent {
+            index,
+            commitment,
+            new_root: merkle::current_root(&env),
+            amount,
+        }
+        .publish(&env);
+        index
     }
 
     /// Pay out a claim from the treasury to a real Stellar `Address` by proving
@@ -146,6 +184,8 @@ impl Zwerc20 {
             &to,
             &amount,
         );
+
+        ClaimEvent { nullifier, to, amount }.publish(&env);
     }
 
     pub fn verifier(env: Env) -> Address {
@@ -166,6 +206,32 @@ impl Zwerc20 {
 
     pub fn is_nullifier_used(env: Env, nullifier: U256) -> bool {
         nullifier::is_used(&env, &nullifier)
+    }
+
+    /// Number of leaves (commitments) inserted so far.
+    pub fn next_index(env: Env) -> u32 {
+        merkle::next_index(&env)
+    }
+
+    /// The commitment at leaf `index`. Panics if the leaf does not exist yet.
+    pub fn leaf(env: Env, index: u32) -> U256 {
+        merkle::leaf(&env, index).expect("leaf index out of range")
+    }
+
+    /// Read up to `limit` leaves starting at `start`, for a client rebuilding
+    /// the Merkle tree. `limit` is capped at [`MAX_LEAVES_PER_READ`], and the
+    /// result is truncated where the tree ends (so it may be shorter than
+    /// requested, or empty when `start >= next_index`).
+    pub fn leaves(env: Env, start: u32, limit: u32) -> Vec<U256> {
+        let end = start.saturating_add(limit.min(MAX_LEAVES_PER_READ));
+        let count = merkle::next_index(&env);
+        let mut out = Vec::new(&env);
+        let mut i = start;
+        while i < end && i < count {
+            out.push_back(merkle::leaf(&env, i).expect("leaf missing below next_index"));
+            i += 1;
+        }
+        out
     }
 }
 

@@ -21,6 +21,10 @@ pub enum MerkleKey {
     Zero(u32),
     Filled(u32),
     KnownRoot(U256),
+    /// The commitment stored at leaf `index`. Unlike the incremental Solidity
+    /// tree, we keep every leaf so an off-chain client can reconstruct the full
+    /// tree (and its Merkle paths) from on-chain state alone.
+    Leaf(u32),
 }
 
 /// Initialize an empty tree: zeros[0]=0, zeros[i]=H(zeros[i-1],zeros[i-1]),
@@ -52,6 +56,9 @@ pub fn insert(env: &Env, leaf: U256) -> u32 {
     if index >= (1u32 << TREE_DEPTH) {
         panic!("merkle tree full");
     }
+
+    // Persist the raw leaf so clients can rebuild the tree from on-chain state.
+    store.set(&MerkleKey::Leaf(index), &leaf);
 
     let mut current = leaf;
     let mut idx = index;
@@ -88,6 +95,19 @@ pub fn is_known_root(env: &Env, root: &U256) -> bool {
         .has(&MerkleKey::KnownRoot(root.clone()))
 }
 
+/// Number of leaves inserted so far (the index the next insert will use).
+pub fn next_index(env: &Env) -> u32 {
+    env.storage()
+        .persistent()
+        .get(&MerkleKey::NextIndex)
+        .unwrap_or(0)
+}
+
+/// The commitment at leaf `index`, or `None` if that leaf has not been inserted.
+pub fn leaf(env: &Env, index: u32) -> Option<U256> {
+    env.storage().persistent().get(&MerkleKey::Leaf(index))
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -113,6 +133,29 @@ mod test {
 
             // A never-seen value is not a known root.
             assert!(!is_known_root(&env, &U256::from_u32(&env, 999)));
+        });
+    }
+
+    #[test]
+    fn leaves_are_stored_and_readable() {
+        let env = Env::default();
+        let id = env.register(crate::Zwerc20, ());
+        // Two full inserts + reads exceed the default test budget; lift it.
+        env.cost_estimate().budget().reset_unlimited();
+        env.as_contract(&id, || {
+            init(&env);
+            assert_eq!(next_index(&env), 0);
+            assert!(leaf(&env, 0).is_none());
+
+            let a = U256::from_u32(&env, 11);
+            let b = U256::from_u32(&env, 22);
+            insert(&env, a.clone());
+            insert(&env, b.clone());
+
+            assert_eq!(next_index(&env), 2);
+            assert_eq!(leaf(&env, 0), Some(a));
+            assert_eq!(leaf(&env, 1), Some(b));
+            assert!(leaf(&env, 2).is_none());
         });
     }
 }

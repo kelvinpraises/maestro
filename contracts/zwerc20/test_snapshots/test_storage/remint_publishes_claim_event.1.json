@@ -96,10 +96,6 @@
         }
       ]
     ],
-    [],
-    [],
-    [],
-    [],
     []
   ],
   "ledger": {
@@ -1787,5 +1783,80 @@
       }
     ]
   },
-  "events": []
+  "events": [
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "CBUSYNQKASUYFWYC3M2GUEDMX4AIVWPALDBYJPNK6554BREHTGZ2IUNF",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "transfer"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
+              },
+              {
+                "address": "CAASGRLHRGV433YBENCWPCNLZXXQCI2FM6E2XTPPAERUKZ4JVPG67KRS"
+              },
+              {
+                "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGO6V"
+              }
+            ],
+            "data": {
+              "i128": "1000000"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "claim"
+              }
+            ],
+            "data": {
+              "map": [
+                {
+                  "key": {
+                    "symbol": "amount"
+                  },
+                  "val": {
+                    "i128": "1000000"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "nullifier"
+                  },
+                  "val": {
+                    "u256": "16698808369434568025822277171136713524641275515424883128791135702968028446440"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "to"
+                  },
+                  "val": {
+                    "address": "CAASGRLHRGV433YBENCWPCNLZXXQCI2FM6E2XTPPAERUKZ4JVPG67KRS"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    }
+  ]
 }
