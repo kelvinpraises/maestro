@@ -69,15 +69,24 @@ function DashboardPage() {
   // "Stash" savings-goal target (sample copy)
   const stashGoalTarget = 25;
 
-  // Earned-this-week hero — friendly sample until stream data is wired.
-  const earnedThisWeek = 12.5;
-
   const quests = SAMPLE_QUESTS;
   const questsLeft = quests.filter((q) => q.status !== "done").length;
 
-  // Private rewards waiting to be claimed (notes on this device, unspent).
+  // Private rewards on this device (notes + on-chain claimed status).
   const rewards = useMyRewards();
-  const claimableCount = (rewards.data ?? []).filter((r) => !r.claimed).length;
+  const rewardViews = rewards.data ?? [];
+  const claimableCount = rewardViews.filter((r) => !r.claimed).length;
+
+  // Earned this week (XLM): sum of this device's rewards that are claimed
+  // on-chain AND were funded within the last 7 days. We approximate the claim
+  // time with the note's funded time (the only local timestamp), which keeps
+  // recently-earned rewards in-window. Empty → a graceful 0.
+  const earnedThisWeek = useMemo(() => {
+    const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    return rewardViews
+      .filter((r) => r.claimed && r.createdAt >= weekAgo)
+      .reduce((sum, r) => sum + r.amountXlm, 0);
+  }, [rewardViews]);
 
   return (
     <div className="stagger-rise space-y-5">

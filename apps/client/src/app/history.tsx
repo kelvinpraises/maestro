@@ -1,49 +1,30 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
-import { Bed, Trash2, Utensils, Dog, CheckCircle2, ArrowLeft } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import { useLocalStreams } from "@/store/stream-store";
+import { ArrowLeft, Gift, Sparkles, WifiOff } from "lucide-react";
+import { useTreasuryHistory, type HistoryItem } from "@/hooks/use-treasury-history";
+import { formatRelativeTime, truncateAddress } from "@/utils";
 
 export const Route = createFileRoute("/history")({
-  component: CompletedChoresPage,
+  component: TreasuryHistoryPage,
 });
 
-type DoneChore = {
-  id: string;
-  title: string;
-  amount: number;
-  icon: LucideIcon;
-  emoji: string;
-  when: string;
-};
-
-// Sample completed chores — shown when there's no real activity yet.
-const SAMPLE_DONE: DoneChore[] = [
-  { id: "d1", title: "Make the Bed", amount: 2, icon: Bed, emoji: "🛏️", when: "Today" },
-  { id: "d2", title: "Wash Dishes", amount: 1.5, icon: Utensils, emoji: "🍽️", when: "Today" },
-  { id: "d3", title: "Take out Trash", amount: 1, icon: Trash2, emoji: "🗑️", when: "Yesterday" },
-  { id: "d4", title: "Walk the Dog", amount: 2.5, icon: Dog, emoji: "🐕", when: "Yesterday" },
-  { id: "d5", title: "Make the Bed", amount: 2, icon: Bed, emoji: "🛏️", when: "Mon" },
-];
-
-function CompletedChoresPage() {
+/**
+ * Family-treasury activity feed: private rewards funded and claimed, newest
+ * first. On-chain events (Soroban RPC, retention-bounded) fused with this
+ * device's own reward notes so the user's activity is always present.
+ */
+function TreasuryHistoryPage() {
   const navigate = useNavigate();
-  const { streams } = useLocalStreams();
+  const { items, truncated, isLoading } = useTreasuryHistory();
 
-  // Map real streams onto the "completed chore" shape when available.
-  const done: DoneChore[] = useMemo(() => {
-    if (streams.length === 0) return SAMPLE_DONE;
-    return streams.map((s, i) => ({
-      id: s.id,
-      title: `${s.tokenSymbol} Reward`,
-      amount: parseFloat(s.totalAmount || "0"),
-      icon: [Bed, Utensils, Trash2, Dog][i % 4],
-      emoji: ["🛏️", "🍽️", "🗑️", "🐕"][i % 4],
-      when: new Date(s.createdAt).toLocaleDateString(),
-    }));
-  }, [streams]);
-
-  const total = done.reduce((sum, d) => sum + d.amount, 0);
+  // Total XLM claimed across the visible feed — the "paid out so far" headline.
+  const claimedTotal = useMemo(
+    () =>
+      items
+        .filter((i) => i.kind === "claimed")
+        .reduce((sum, i) => sum + i.amountXlm, 0),
+    [items],
+  );
 
   return (
     <div className="stagger-rise space-y-5">
@@ -57,49 +38,109 @@ function CompletedChoresPage() {
           <ArrowLeft className="size-5" strokeWidth={2.4} />
         </button>
         <div>
-          <h1 className="font-display text-2xl font-extrabold leading-tight">All Done!</h1>
-          <p className="text-sm font-semibold text-muted-foreground">Chores you've crushed</p>
+          <h1 className="font-display text-2xl font-extrabold leading-tight">
+            Family Treasury
+          </h1>
+          <p className="text-sm font-semibold text-muted-foreground">
+            Rewards funded &amp; claimed
+          </p>
         </div>
       </header>
 
-      {/* This-week total */}
+      {/* Paid-out total */}
       <div className="animate-pop-in flex items-center justify-between rounded-3xl bg-primary p-5 text-primary-foreground shadow-lg">
         <div>
           <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-primary-foreground/70">
-            Earned so far
+            Claimed so far
           </p>
           <p className="font-display text-4xl font-extrabold leading-none tabular-nums">
-            ${total.toFixed(2)}
+            {claimedTotal.toFixed(2)}
+            <span className="ml-1.5 align-baseline text-lg font-extrabold text-primary-foreground/80">
+              XLM
+            </span>
           </p>
         </div>
-        <span className="text-4xl" aria-hidden>🏅</span>
+        <span className="text-4xl" aria-hidden>
+          🏅
+        </span>
       </div>
 
-      {/* Completed list */}
-      <div className="space-y-2.5">
-        {done.map((d) => (
-          <div
-            key={d.id}
-            className="flex items-center gap-3 rounded-[1.6rem] border border-border/60 bg-card p-3 shadow-sm"
-          >
-            <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-m-mint text-xl shadow-sm">
-              <span aria-hidden>{d.emoji}</span>
+      {truncated && (
+        <div className="flex items-center gap-2 rounded-2xl border border-border/60 bg-card/70 px-4 py-3 text-xs font-semibold text-muted-foreground">
+          <WifiOff className="size-4 shrink-0" strokeWidth={2.4} />
+          <span>
+            Showing recent activity plus your own rewards. Older on-chain history
+            may be beyond the network&apos;s retention window.
+          </span>
+        </div>
+      )}
+
+      {/* Activity list */}
+      {isLoading && items.length === 0 ? (
+        <p className="px-1 text-sm font-semibold text-muted-foreground">
+          Loading treasury activity…
+        </p>
+      ) : items.length === 0 ? (
+        <div className="rounded-3xl border border-dashed border-border/70 bg-card/60 p-8 text-center">
+          <span className="text-3xl" aria-hidden>
+            🎁
+          </span>
+          <p className="mt-2 font-display text-base font-bold text-foreground">
+            No rewards yet
+          </p>
+          <p className="mt-1 text-sm font-semibold text-muted-foreground">
+            Fund a private reward to start your family treasury.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-2.5">
+          {items.map((item) => (
+            <ActivityRow key={item.id} item={item} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ActivityRow({ item }: { item: HistoryItem }) {
+  const claimed = item.kind === "claimed";
+  return (
+    <div className="flex items-center gap-3 rounded-[1.6rem] border border-border/60 bg-card p-3 shadow-sm">
+      <span
+        className={`flex size-12 shrink-0 items-center justify-center rounded-2xl shadow-sm ${
+          claimed ? "bg-primary/15 text-m-green-ink" : "bg-m-purple/12 text-m-purple"
+        }`}
+      >
+        {claimed ? (
+          <Sparkles className="size-5" strokeWidth={2.4} />
+        ) : (
+          <Gift className="size-5" strokeWidth={2.4} />
+        )}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-display text-[15px] font-bold text-foreground">
+          {claimed ? "Reward claimed" : "Reward funded"}
+          {item.mine && (
+            <span className="ml-1.5 align-middle text-[10px] font-extrabold uppercase tracking-wide text-muted-foreground">
+              · you
             </span>
-            <div className="min-w-0 flex-1">
-              <p className="truncate font-display text-[15px] font-bold text-foreground">
-                {d.title}
-              </p>
-              <p className="text-xs font-semibold text-muted-foreground">{d.when}</p>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="font-display text-base font-extrabold tabular-nums text-m-green-ink">
-                +${d.amount.toFixed(2)}
-              </span>
-              <CheckCircle2 className="size-5 text-primary" strokeWidth={2.4} />
-            </div>
-          </div>
-        ))}
+          )}
+        </p>
+        <p className="truncate text-xs font-semibold text-muted-foreground">
+          {formatRelativeTime(new Date(item.timestamp))}
+          {claimed && item.to ? ` · to ${truncateAddress(item.to)}` : ""}
+        </p>
       </div>
+      <span
+        className={`shrink-0 font-display text-base font-extrabold tabular-nums ${
+          claimed ? "text-m-green-ink" : "text-foreground"
+        }`}
+      >
+        {claimed ? "+" : ""}
+        {item.amountXlm.toFixed(2)}
+        <span className="ml-0.5 text-[11px] font-bold text-muted-foreground">XLM</span>
+      </span>
     </div>
   );
 }

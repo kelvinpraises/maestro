@@ -2,7 +2,7 @@ import { Flame } from "lucide-react";
 import { cn } from "@/utils";
 
 interface EarningsHeroProps {
-  /** Dollar amount earned this week, e.g. 12.5 */
+  /** XLM amount claimed this week, e.g. 12.5 */
   amount: number;
   /** Streak length in days */
   streakDays: number;
@@ -37,9 +37,12 @@ export function EarningsHero({
         <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-primary-foreground/70">
           {label}
         </p>
-        <div className="mt-1 flex items-end gap-1">
+        <div className="mt-1 flex items-end gap-1.5">
           <span className="font-display text-5xl font-extrabold leading-none tabular-nums">
-            ${amount.toFixed(2)}
+            {amount.toFixed(2)}
+          </span>
+          <span className="pb-1 font-display text-xl font-extrabold leading-none text-primary-foreground/80">
+            XLM
           </span>
         </div>
 
