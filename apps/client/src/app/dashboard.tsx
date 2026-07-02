@@ -1,19 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Bell, Sparkles, Bed, Trash2, Utensils, Dog, PiggyBank, ChevronRight } from "lucide-react";
-import { usePrivy } from "@privy-io/react-auth";
-import { useEffect, useMemo } from "react";
-import { getPendingByType } from "@/utils/pending-engine";
-import { formatUnits } from "viem";
+import { useEffect, useMemo, useState } from "react";
 import { WelcomeDialog } from "@/components/organisms/welcome-dialog";
 import { EarningsHero } from "@/components/organisms/earnings-hero";
 import { QuestCard, type QuestTint, type QuestStatus } from "@/components/molecules/quest-card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/atoms/avatar";
-import { useLocalStreams, cleanupCompletedStreams } from "@/store/stream-store";
-import { useTokenBalance } from "@/hooks/use-stream-reads";
-import { useStealthWallet } from "@/providers/stealth-wallet-provider";
-import { useChain } from "@/providers/chain-provider";
-import { getSendableTokens } from "@/config/chains";
-import { useAutoCollect } from "@/hooks/use-auto-collect";
+import { useStellarWallet } from "@/providers/stellar-wallet-provider";
+import { zwerc20 } from "@/contracts/stellar";
 
 export const Route = createFileRoute("/dashboard")({
   component: DashboardPage,
@@ -40,61 +33,43 @@ const SAMPLE_QUESTS: Quest[] = [
 
 function DashboardPage() {
   const navigate = useNavigate();
-  const { ready, authenticated } = usePrivy();
 
-  // Redirect to pending circle join if one exists (post-login flow)
+  // In-app Stellar wallet — the active family-treasury identity.
+  const { publicKey, xlmBalance, balanceLoaded, fund, isFunding } =
+    useStellarWallet();
+
+  // Real XLM balance from testnet drives the "My Stash" card. Unfunded is a
+  // valid 0 balance, not an error.
+  const stashBalance = useMemo(() => {
+    if (xlmBalance === null) return null;
+    return parseFloat(xlmBalance);
+  }, [xlmBalance]);
+
+  // Proof of plumbing: read the treasury's `next_index()` through the zwerc20
+  // bindings client (a real on-chain simulation). Should read 1 on a fresh tree.
+  const [treeIndex, setTreeIndex] = useState<number | null>(null);
+  const [treeError, setTreeError] = useState(false);
   useEffect(() => {
-    if (!ready || !authenticated) return;
-    const pending = getPendingByType("circle_join");
-    if (pending.length === 0) return;
-    const { inviteCode, senderPubKey } = pending[0].payload;
-    if (inviteCode && senderPubKey) {
-      navigate({ to: "/circles/join", search: { code: inviteCode, key: senderPubKey } });
-    }
-  }, [ready, authenticated, navigate]);
-
-  // Stealth wallet (privacy layer) — kept intact for the wiring workstream
-  const stealthWallet = useStealthWallet();
-  const { stealthAddress, isReady: isStealthReady } = stealthWallet;
-
-  const { chainConfig, chainId } = useChain();
-
-  const tokens = getSendableTokens(chainConfig.contracts);
-  const walletAddr = isStealthReady && stealthAddress ? (stealthAddress as `0x${string}`) : undefined;
-
-  const { data: usdtBalanceRaw } = useTokenBalance(walletAddr, tokens[0]?.address);
-  const { data: usdcBalanceRaw } = useTokenBalance(walletAddr, tokens[1]?.address);
-
-  const usdcBalance = useMemo(() => {
-    if (usdcBalanceRaw === undefined) return null;
-    return parseFloat(formatUnits(usdcBalanceRaw, 18));
-  }, [usdcBalanceRaw]);
-
-  const usdtBalance = useMemo(() => {
-    if (usdtBalanceRaw === undefined) return null;
-    return parseFloat(formatUnits(usdtBalanceRaw, 18));
-  }, [usdtBalanceRaw]);
-
-  const totalBalance = (usdcBalance ?? 0) + (usdtBalance ?? 0);
-
-  const { streams } = useLocalStreams();
-  useEffect(() => {
-    cleanupCompletedStreams(chainId);
-  }, [chainId]);
-
-  // Auto-collect incoming payments when enabled in settings
-  useAutoCollect();
+    let cancelled = false;
+    (async () => {
+      try {
+        const tx = await zwerc20.next_index();
+        if (!cancelled) setTreeIndex(Number(tx.result));
+      } catch (err) {
+        console.warn("[dashboard] zwerc20.next_index() read failed", err);
+        if (!cancelled) setTreeError(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // "Stash" savings-goal target (sample copy)
   const stashGoalTarget = 25;
 
-  // Earned-this-week hero derives from delivered stream value when present,
-  // else falls back to a friendly sample so the screen always reads well.
-  const earnedThisWeek = useMemo(() => {
-    if (streams.length === 0) return 12.5;
-    const delivered = streams.reduce((sum, s) => sum + parseFloat(s.totalAmount || "0") * 0.25, 0);
-    return Math.max(0, delivered);
-  }, [streams]);
+  // Earned-this-week hero — friendly sample until stream data is wired.
+  const earnedThisWeek = 12.5;
 
   const quests = SAMPLE_QUESTS;
   const questsLeft = quests.filter((q) => q.status !== "done").length;
@@ -107,7 +82,7 @@ function DashboardPage() {
       <header className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Avatar className="size-12 rounded-2xl border-2 border-card shadow-sm">
-            <AvatarImage src={`https://avatar.vercel.sh/${stealthAddress || "alex"}.png`} alt="Alex" />
+            <AvatarImage src={`https://avatar.vercel.sh/${publicKey || "alex"}.png`} alt="Alex" />
             <AvatarFallback className="rounded-2xl bg-m-sky font-display text-lg font-bold text-m-blue">
               A
             </AvatarFallback>
@@ -146,7 +121,7 @@ function DashboardPage() {
             My Stash
           </p>
           <p className="font-display text-xl font-extrabold tabular-nums">
-            ${totalBalance.toFixed(2)}
+            {stashBalance === null ? "…" : `${stashBalance.toFixed(2)} XLM`}
           </p>
         </div>
         <span className="mr-1 flex flex-col items-end">
@@ -154,7 +129,7 @@ function DashboardPage() {
             Goal: New Lego Set
           </span>
           <span className="text-[11px] font-extrabold tabular-nums text-m-green-ink">
-            ${stashGoalTarget.toFixed(2)}
+            {stashGoalTarget.toFixed(0)} XLM
           </span>
         </span>
         <ChevronRight className="size-5 text-muted-foreground" strokeWidth={2.6} />
@@ -187,6 +162,44 @@ function DashboardPage() {
           ))}
         </div>
       </section>
+
+      {/* Live-plumbing footer — proves the Stellar wallet + bindings are wired.
+          Reads the family treasury's on-chain leaf index via the zwerc20 client
+          and lets a demo user top up the in-app wallet from friendbot. */}
+      <footer className="rounded-3xl border border-border/60 bg-card/70 p-4 text-[11px] font-semibold text-muted-foreground shadow-sm">
+        <div className="flex items-center justify-between gap-3">
+          <span>Wallet</span>
+          <span className="font-mono tabular-nums">
+            {publicKey.slice(0, 4)}…{publicKey.slice(-4)}
+          </span>
+        </div>
+        <div className="mt-1.5 flex items-center justify-between gap-3">
+          <span>XLM balance</span>
+          <span className="tabular-nums">
+            {!balanceLoaded
+              ? "loading…"
+              : `${(stashBalance ?? 0).toFixed(2)} XLM`}
+          </span>
+        </div>
+        <div className="mt-1.5 flex items-center justify-between gap-3">
+          <span>Treasury leaf index</span>
+          <span className="tabular-nums">
+            {treeError
+              ? "unavailable"
+              : treeIndex === null
+                ? "reading…"
+                : treeIndex}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={() => void fund()}
+          disabled={isFunding}
+          className="mt-3 h-9 w-full rounded-full bg-primary/15 font-display text-xs font-extrabold text-m-green-ink transition-transform active:scale-[0.98] disabled:opacity-50"
+        >
+          {isFunding ? "Funding…" : "Top up test XLM"}
+        </button>
+      </footer>
     </div>
   );
 }

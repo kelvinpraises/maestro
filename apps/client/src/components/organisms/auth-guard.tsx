@@ -1,28 +1,7 @@
-import { usePrivy } from "@privy-io/react-auth";
-import { useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
-import { Skeleton } from "@/components/atoms/skeleton";
-
+// Maestro no longer gates the app behind Privy login. The in-app Stellar wallet
+// is generated/restored on boot, so every route is reachable immediately. This
+// guard is now a pass-through — kept as a seam so a future real gate (e.g. a
+// PIN/password on the local key) can slot back in without touching every route.
 export function AuthGuard({ children }: { children: React.ReactNode }) {
-  const { ready, authenticated } = usePrivy();
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (ready && !authenticated) {
-      navigate({ to: "/" });
-    }
-  }, [ready, authenticated, navigate]);
-
-  if (!ready) {
-    return (
-      <div className="w-full max-w-7xl mx-auto space-y-6">
-        <Skeleton className="w-48 h-10" />
-        <Skeleton className="w-full h-64 rounded-2xl" />
-      </div>
-    );
-  }
-
-  if (!authenticated) return null;
-
   return <>{children}</>;
 }
