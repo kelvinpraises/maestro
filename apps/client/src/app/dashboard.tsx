@@ -57,7 +57,6 @@ import {
   type Chore,
   type ChoreState,
 } from "@/lib/family";
-import { zwerc20 } from "@/contracts/stellar";
 import { useAllowanceDrip } from "@/hooks/use-allowance-drip";
 import { useCollectAllowance, type CollectStep } from "@/hooks/use-allowance";
 import { useCountUp } from "@/hooks/use-count-up";
@@ -146,78 +145,13 @@ function HomeHeader({
       </div>
       <button
         type="button"
-        onClick={() => navigate({ to: "/settings" })}
+        onClick={() => navigate({ to: "/me" })}
         aria-label="Notifications"
         className="press-pop flex size-11 shrink-0 items-center justify-center rounded-2xl border-2 border-m-ink bg-card text-foreground shadow-[var(--m-pop-sm)]"
       >
         <BellIcon className="size-5" weight="bold" />
       </button>
     </header>
-  );
-}
-
-// ── Live-plumbing footer (step 6 moves this into Me / For grown-ups) ─────────
-
-function GrownupsFooter({ label }: { label: string }) {
-  const { publicKey, xlmBalance, balanceLoaded, fund, isFunding } =
-    useStellarWallet();
-
-  // Proof of plumbing: read the treasury's `next_index()` through the zwerc20
-  // bindings client (a real on-chain simulation). Should read 1 on a fresh tree.
-  const [treeIndex, setTreeIndex] = useState<number | null>(null);
-  const [treeError, setTreeError] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const tx = await zwerc20.next_index();
-        if (!cancelled) setTreeIndex(Number(tx.result));
-      } catch (err) {
-        console.warn("[dashboard] zwerc20.next_index() read failed", err);
-        if (!cancelled) setTreeError(true);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const balance = xlmBalance === null ? 0 : parseFloat(xlmBalance);
-
-  return (
-    <footer className="card-pop bg-card/70 p-4 text-[11px] font-semibold text-muted-foreground">
-      <p className="text-microlabel mb-2 text-muted-foreground/80">{label}</p>
-      <div className="flex items-center justify-between gap-3">
-        <span>Wallet</span>
-        <span className="font-mono tabular-nums">
-          {publicKey.slice(0, 4)}…{publicKey.slice(-4)}
-        </span>
-      </div>
-      <div className="mt-1.5 flex items-center justify-between gap-3">
-        <span>XLM balance</span>
-        <span className="tabular-nums">
-          {!balanceLoaded ? "loading…" : `${balance.toFixed(2)} XLM`}
-        </span>
-      </div>
-      <div className="mt-1.5 flex items-center justify-between gap-3">
-        <span>Treasury leaf index</span>
-        <span className="tabular-nums">
-          {treeError
-            ? "unavailable"
-            : treeIndex === null
-              ? "reading…"
-              : treeIndex}
-        </span>
-      </div>
-      <button
-        type="button"
-        onClick={() => void fund()}
-        disabled={isFunding}
-        className="press-pop mt-3 h-9 w-full rounded-full border-2 border-m-ink bg-primary/20 font-display text-xs font-extrabold text-m-green-ink disabled:opacity-50"
-      >
-        {isFunding ? "Funding…" : "Top up test XLM"}
-      </button>
-    </footer>
   );
 }
 
@@ -287,7 +221,7 @@ function KidHome({ chores }: { chores: ChoreRow[] }) {
       <KidStashCard
         stashBalance={stashBalance}
         stashGoalTarget={stashGoalTarget}
-        onOpen={() => navigate({ to: "/history" })}
+        onOpen={() => navigate({ to: "/family" })}
       />
 
       {/* Rewards mini-card → private-claim flow. */}
@@ -355,8 +289,6 @@ function KidHome({ chores }: { chores: ChoreRow[] }) {
           </div>
         )}
       </section>
-
-      <GrownupsFooter label="Wallet" />
 
       {/* "I did it!" confirm — tapping a todo chore asks before waving it in. */}
       <Dialog
@@ -876,7 +808,7 @@ function ParentHome({ chores }: { chores: ChoreRow[] }) {
           </h2>
           <button
             type="button"
-            onClick={() => navigate({ to: "/circles" })}
+            onClick={() => navigate({ to: "/family" })}
             className="flex items-center gap-0.5 text-xs font-extrabold text-muted-foreground hover:text-foreground"
           >
             Manage
@@ -887,7 +819,7 @@ function ParentHome({ chores }: { chores: ChoreRow[] }) {
         {chores.length === 0 ? (
           <button
             type="button"
-            onClick={() => navigate({ to: "/circles" })}
+            onClick={() => navigate({ to: "/family" })}
             className="animate-pop-in press-pop card-pop bg-card/70 flex w-full items-center gap-3 p-5 text-left"
           >
             <IconTile icon={BroomIcon} tint="lilac" size="lg" />
@@ -948,7 +880,7 @@ function ParentHome({ chores }: { chores: ChoreRow[] }) {
         ) : (
           <button
             type="button"
-            onClick={() => navigate({ to: "/circles" })}
+            onClick={() => navigate({ to: "/family" })}
             className="animate-pop-in press-pop card-pop card-pop-lilac flex w-full items-center gap-3 p-5 text-left"
           >
             <IconTile icon={UserPlusIcon} tint="lilac" size="lg" bordered />
@@ -964,8 +896,6 @@ function ParentHome({ chores }: { chores: ChoreRow[] }) {
           </button>
         )}
       </section>
-
-      <GrownupsFooter label="For grown-ups" />
     </div>
   );
 }

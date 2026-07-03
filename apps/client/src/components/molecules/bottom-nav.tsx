@@ -1,5 +1,5 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { ScrollIcon, SmileyIcon, type Icon } from "@phosphor-icons/react";
+import { HouseIcon, UsersIcon, SmileyIcon, type Icon } from "@phosphor-icons/react";
 import { cn } from "@/utils";
 
 type NavItem = {
@@ -9,18 +9,35 @@ type NavItem = {
   match: (path: string) => boolean;
 };
 
+// Home / Family / Me — every tab answers a real question: mine / ours / me
+// (DESIGN-STORY §4 nav survivor). Sibling routes fold into their home tab:
+// rewards + the private-claim flow live under Home; the treasury feed and the
+// old /circles + /history live under Family; /streams (allowance setup) is
+// reached from Me → For grown-ups, so it lights up the Me tab.
 const items: NavItem[] = [
   {
     to: "/dashboard",
-    label: "Quests",
-    icon: ScrollIcon,
-    match: (p) => p === "/dashboard" || p.startsWith("/streams") || p.startsWith("/rewards") || p.startsWith("/history"),
+    label: "Home",
+    icon: HouseIcon,
+    match: (p) => p === "/dashboard" || p.startsWith("/rewards"),
   },
   {
-    to: "/settings",
+    to: "/family",
+    label: "Family",
+    icon: UsersIcon,
+    match: (p) =>
+      p.startsWith("/family") ||
+      p.startsWith("/circles") ||
+      p.startsWith("/history"),
+  },
+  {
+    to: "/me",
     label: "Me",
     icon: SmileyIcon,
-    match: (p) => p.startsWith("/settings") || p.startsWith("/circles"),
+    match: (p) =>
+      p.startsWith("/me") ||
+      p.startsWith("/settings") ||
+      p.startsWith("/streams"),
   },
 ];
 
