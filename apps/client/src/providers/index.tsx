@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StellarWalletProvider } from "./stellar-wallet-provider";
+import { FamilyBoardProvider } from "./family-board-provider";
 import { ThemeProvider } from "./theme-provider";
 
 interface RootProviderProps {
@@ -21,7 +22,10 @@ export default function RootProvider({ children }: RootProviderProps) {
     <ThemeProvider>
       <QueryClientProvider client={queryClient}>
         {/* Stellar in-app wallet — the active identity for the family treasury. */}
-        <StellarWalletProvider>{children}</StellarWalletProvider>
+        <StellarWalletProvider>
+          {/* Encrypted family-board sync loop (poll/push), one per session. */}
+          <FamilyBoardProvider>{children}</FamilyBoardProvider>
+        </StellarWalletProvider>
       </QueryClientProvider>
     </ThemeProvider>
   );

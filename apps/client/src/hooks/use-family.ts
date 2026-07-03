@@ -28,8 +28,12 @@ import {
   DONE_LOG_EVENT,
   GOAL_EVENT,
   SCOOP_LOG_EVENT,
+  FEED_EVENT,
+  loadFamilyFeed,
   randomId,
+  randomCapability,
   type Family,
+  type FeedEntry,
   type Chore,
   type ChoreState,
   type ChoreStates,
@@ -37,6 +41,8 @@ import {
   type InvitePayload,
   type SavingsGoal,
 } from "@/lib/family";
+import { generateFamilyKey } from "@/lib/board";
+import { requestBoardPush } from "@/hooks/use-family-board";
 
 // ── useFamily — the family membership on this device ─────────────────────────
 
@@ -62,30 +68,49 @@ export function useFamily() {
     setFamily(next);
   }, []);
 
-  /** Create a family on THIS device → role: parent. */
+  /**
+   * Create a family on THIS device → role: parent. Async because it mints the
+   * encrypted board's AES-GCM family key at creation (WebCrypto). The board id
+   * doubles as the family id (a 128-bit capability). If key generation somehow
+   * fails, the family is still created — just without board sync (degrades to
+   * links-by-hand, exactly like an old family).
+   */
   const createFamily = useCallback(
-    (input: {
+    async (input: {
       name: string;
       parentAddress: string;
       kidNames?: string[];
       chores?: Chore[];
-    }): Family => {
+    }): Promise<Family> => {
+      const id = randomCapability(); // 128-bit capability, valid board id
+      let familyKey: string | undefined;
+      try {
+        familyKey = await generateFamilyKey();
+      } catch {
+        familyKey = undefined; // sync disabled, app still works
+      }
       const next: Family = {
-        id: randomId(),
+        id,
         name: input.name.trim() || "My Family",
         role: "parent",
         parentAddress: input.parentAddress,
         kidNames: (input.kidNames ?? []).map((n) => n.trim()).filter(Boolean),
         chores: input.chores ?? [],
         createdAt: Date.now(),
+        ...(familyKey ? { familyKey, boardId: id } : {}),
       };
       persist(next);
+      requestBoardPush(); // seed the board (version 1) if key generation worked
       return next;
     },
     [persist],
   );
 
-  /** Join a family from an invite link on THIS device → role: kid. */
+  /**
+   * Join a family from an invite link on THIS device → role: kid. Board fields
+   * (boardId/familyKey) ride the invite when present; an OLD link without them
+   * still joins fine — just unsynced.
+   */
   const joinFamily = useCallback(
     (payload: InvitePayload): Family => {
       const next: Family = {
@@ -97,8 +122,13 @@ export function useFamily() {
         kidName: payload.kidName,
         chores: payload.chores ?? [],
         createdAt: Date.now(),
+        // Board sync only when the invite carried both fields.
+        ...(payload.boardId && payload.familyKey
+          ? { boardId: payload.boardId, familyKey: payload.familyKey }
+          : {}),
       };
       persist(next);
+      requestBoardPush(); // publishes this kid's address + a kid-joined notice
       return next;
     },
     [persist],
@@ -114,6 +144,7 @@ export function useFamily() {
       if (!cur) return null;
       const created: Chore = { id: randomId(), ...chore };
       persist({ ...cur, chores: [...cur.chores, created] });
+      requestBoardPush(); // parent chore edits sync to kid devices
       return created;
     },
     [persist],
@@ -124,6 +155,7 @@ export function useFamily() {
       const cur = loadFamily();
       if (!cur) return;
       persist({ ...cur, chores: cur.chores.filter((c) => c.id !== choreId) });
+      requestBoardPush();
     },
     [persist],
   );
@@ -135,6 +167,9 @@ export function useFamily() {
       const trimmed = name.trim();
       if (!trimmed || cur.kidNames.includes(trimmed)) return;
       persist({ ...cur, kidNames: [...cur.kidNames, trimmed] });
+      // kidNames aren't a board section (kids self-publish on join), but a push
+      // is cheap and keeps the parent's board fresh.
+      requestBoardPush();
     },
     [persist],
   );
@@ -202,6 +237,9 @@ export function useChoreStates() {
       if (state === "done") recordDone(choreId, name, now);
       emitChoreStatesChanged();
       setStates(next);
+      // Push the change to the board: a kid's "I did it" reaches the parent's nod
+      // queue across devices; the parent's "done" reaches the kid's home.
+      requestBoardPush();
     },
     [],
   );
@@ -313,4 +351,28 @@ export function useScoopedThisWeek(): number {
     };
   }, [compute]);
   return xlm;
+}
+
+// ── useFamilyFeed — the warm "our family" activity: board notices + local notes ─
+//
+// The family feed (audit issue 11) is attributable and cross-device: signed board
+// notices (kid-joined, reward-ready…) fused with this device's own local notes.
+// It's distinct from the raw treasury/chain feed, which now lives on /me. Reloads
+// on the same-tab FEED_EVENT (a merge cached new notices, or a local note landed)
+// and cross-tab storage.
+
+export function useFamilyFeed(): FeedEntry[] {
+  const [feed, setFeed] = useState<FeedEntry[]>(() =>
+    typeof window === "undefined" ? [] : loadFamilyFeed(),
+  );
+  useEffect(() => {
+    const reload = () => setFeed(loadFamilyFeed());
+    window.addEventListener(FEED_EVENT, reload);
+    window.addEventListener("storage", reload);
+    return () => {
+      window.removeEventListener(FEED_EVENT, reload);
+      window.removeEventListener("storage", reload);
+    };
+  }, []);
+  return feed;
 }

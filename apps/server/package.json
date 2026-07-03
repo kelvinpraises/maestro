@@ -1,0 +1,16 @@
+{
+  "name": "maestro-server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The Family Board relay — a tiny, dependency-free versioned-blob store for Maestro's encrypted family sync.",
+  "scripts": {
+    "dev": "node --experimental-strip-types src/index.ts",
+    "start": "node --experimental-strip-types src/index.ts",
+    "type-check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.9.3"
+  }
+}

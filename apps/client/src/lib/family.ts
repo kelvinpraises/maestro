@@ -97,6 +97,16 @@ export interface Family {
   chores: Chore[];
   /** Unix ms created/joined. */
   createdAt: number;
+  /**
+   * The encrypted family board's shared symmetric key (AES-GCM, base64url), and
+   * the board id (a base64url capability, also this family's `id` when minted
+   * fresh). BOTH are optional so a family created before the board landed — or
+   * joined via an old invite link without board fields — keeps working with sync
+   * simply disabled. When present, use-family-board syncs against them.
+   */
+  familyKey?: string;
+  /** The board capability id (server path). Defaults to `id` when board-enabled. */
+  boardId?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -524,6 +534,29 @@ export function randomId(): string {
   return Math.random().toString(36).slice(2, 14);
 }
 
+/**
+ * A random 128-bit capability as a URL-safe base64url string (22 chars, no
+ * padding). Doubles as the family board id — it's an unguessable secret the
+ * parent mints once, and the board server validates it as base64url. This is the
+ * ONLY thing gating access to a family's board, so it must be high-entropy.
+ */
+export function randomCapability(): string {
+  const g = globalThis as unknown as { crypto?: Crypto };
+  const bytes = new Uint8Array(16);
+  if (g.crypto?.getRandomValues) g.crypto.getRandomValues(bytes);
+  else for (let i = 0; i < 16; i++) bytes[i] = Math.floor(Math.random() * 256);
+  // base64url, no padding.
+  let b64: string;
+  if (typeof btoa === "function") {
+    let bin = "";
+    for (const byte of bytes) bin += String.fromCharCode(byte);
+    b64 = btoa(bin);
+  } else {
+    b64 = Buffer.from(bytes).toString("base64");
+  }
+  return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 //  base64url JSON codec (URL-safe, compact, no padding)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -587,6 +620,13 @@ export interface InvitePayload {
   parentAddress: string;
   kidName: string;
   chores: Chore[];
+  /**
+   * OPTIONAL board fields (backward-compatible). When both are present, the kid
+   * device joins the encrypted family board and syncs; when ABSENT (an old link
+   * minted before the board landed), the kid still joins fine — just unsynced.
+   */
+  boardId?: string;
+  familyKey?: string;
 }
 
 /**
@@ -613,6 +653,8 @@ interface InviteWire {
   p: string; // parentAddress
   k: string; // kidName
   c: ChoreTuple[]; // chores
+  b?: string; // boardId (optional — absent on old links)
+  y?: string; // familyKey (optional — absent on old links)
 }
 
 export function encodeInvite(payload: InvitePayload): string {
@@ -621,6 +663,10 @@ export function encodeInvite(payload: InvitePayload): string {
     f: payload.familyName,
     p: payload.parentAddress,
     k: payload.kidName,
+    // Board fields ride along only when board-enabled; omitted keeps old links
+    // byte-identical and lets a pre-board family invite decode unchanged.
+    ...(payload.boardId ? { b: payload.boardId } : {}),
+    ...(payload.familyKey ? { y: payload.familyKey } : {}),
     c: payload.chores.map((ch): ChoreTuple => {
       const note = ch.note?.trim() ?? "";
       const assignee = ch.assignee?.trim() ?? "";
@@ -645,6 +691,10 @@ export function decodeInvite(blob: string): InvitePayload {
     familyName: w.f,
     parentAddress: w.p,
     kidName: w.k,
+    // Board fields are optional; an old link simply omits `b`/`y` → undefined,
+    // and the joiner falls back to unsynced (see joinFamily / use-family-board).
+    ...(w.b ? { boardId: w.b } : {}),
+    ...(w.y ? { familyKey: w.y } : {}),
     // Destructure defensively — older links won't have the trailing elements,
     // so note/assignee/rep are simply `undefined` there.
     chores: (w.c ?? []).map(([id, name, emoji, rewardXlm, note, assignee, rep]) => ({
@@ -832,6 +882,98 @@ export function setKidAddress(kidName: string, address: string): void {
   } catch {
     /* ignore */
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Family feed store — the warm, attributable "our family" activity (audit 11).
+//  Two sources fuse here:
+//    • BOARD NOTICES — synced, signed, cross-device (kid-joined, reward-ready…),
+//      cached locally by use-family-board so the feed renders offline too.
+//    • LOCAL NOTES   — this device's own little log entries (a chore approved,
+//      a reward sent), attributable to "you" without needing the board.
+//  Both are plain {id, at, kind, text, kidName} rows the feed sorts newest-first.
+//  This is distinct from the treasury (chain) feed, which moves to /me.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Cached board notices (mirror of the verified board's notices), for the feed. */
+export const BOARD_NOTICES_STORAGE_KEY = "maestro.board-notices.v1";
+/** This device's own local feed notes (never board-synced; per-device). */
+export const LOCAL_NOTES_STORAGE_KEY = "maestro.local-notes.v1";
+export const FEED_EVENT = "maestro:feed-changed";
+const LOCAL_NOTES_CAP = 100;
+
+/** A row in the family feed. `kind` mirrors the board notice kinds plus locals. */
+export interface FeedEntry {
+  id: string;
+  at: number;
+  kind: "kid-joined" | "reward-ready" | "allowance-started" | "message" | "note";
+  kidName?: string;
+  text?: string;
+}
+
+/** Replace the cached board notices (called by the sync hook after each merge). */
+export function saveBoardNotices(notices: FeedEntry[]): void {
+  try {
+    localStorage.setItem(BOARD_NOTICES_STORAGE_KEY, JSON.stringify(notices));
+    if (typeof window !== "undefined") window.dispatchEvent(new Event(FEED_EVENT));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function loadBoardNotices(): FeedEntry[] {
+  try {
+    const raw = localStorage.getItem(BOARD_NOTICES_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as FeedEntry[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function loadLocalNotes(): FeedEntry[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_NOTES_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as FeedEntry[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Append one local (this-device) feed note. Capped, newest last, event-emitting. */
+export function recordLocalNote(entry: Omit<FeedEntry, "id" | "at"> & { id?: string; at?: number }): void {
+  try {
+    const row: FeedEntry = {
+      id: entry.id ?? randomId(),
+      at: entry.at ?? Date.now(),
+      kind: entry.kind,
+      ...(entry.kidName ? { kidName: entry.kidName } : {}),
+      ...(entry.text ? { text: entry.text } : {}),
+    };
+    const log = loadLocalNotes();
+    log.push(row);
+    const capped = log.length > LOCAL_NOTES_CAP ? log.slice(log.length - LOCAL_NOTES_CAP) : log;
+    localStorage.setItem(LOCAL_NOTES_STORAGE_KEY, JSON.stringify(capped));
+    if (typeof window !== "undefined") window.dispatchEvent(new Event(FEED_EVENT));
+  } catch {
+    /* ignore */
+  }
+}
+
+/** The merged family feed: board notices + local notes, id-deduped, newest-first. */
+export function loadFamilyFeed(): FeedEntry[] {
+  const seen = new Set<string>();
+  const out: FeedEntry[] = [];
+  for (const e of [...loadBoardNotices(), ...loadLocalNotes()]) {
+    if (seen.has(e.id)) continue;
+    seen.add(e.id);
+    out.push(e);
+  }
+  out.sort((a, b) => b.at - a.at);
+  return out;
 }
 
 /**

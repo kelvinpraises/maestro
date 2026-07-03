@@ -26,8 +26,6 @@ import {
   UserPlusIcon,
   BroomIcon,
   LockIcon,
-  BankIcon,
-  WifiSlashIcon,
   ListChecksIcon,
 } from "@phosphor-icons/react";
 import { EmojiTile, IconTile } from "@/components/atoms/icon-tile";
@@ -46,18 +44,15 @@ import {
 } from "@/components/molecules/dialog";
 import { cn } from "@/utils";
 import { useStellarWallet } from "@/providers/stellar-wallet-provider";
-import { useFamily } from "@/hooks/use-family";
+import { useFamily, useFamilyFeed } from "@/hooks/use-family";
 import { useFundReward } from "@/hooks/use-rewards";
-import {
-  useTreasuryHistory,
-  type HistoryItem,
-} from "@/hooks/use-treasury-history";
-import { formatRelativeTime, truncateAddress } from "@/utils";
+import { formatRelativeTime } from "@/utils";
 import {
   buildInviteLink,
   buildClaimLink,
   type Chore,
   type ChoreRepeat,
+  type FeedEntry,
 } from "@/lib/family";
 
 // The three parent groups. `?g=kids` deep-links straight to the Kids group so
@@ -227,7 +222,7 @@ function ParentView({
         {group === "kids" && (
           <KidsSection family={family} addKidName={addKidName} />
         )}
-        {group === "activity" && <TreasurySection />}
+        {group === "activity" && <FamilyFeedSection />}
       </div>
     </div>
   );
@@ -613,6 +608,11 @@ function KidsSection({
       parentAddress: publicKey,
       kidName: inviteFor,
       chores: family.chores,
+      // Board fields ride the invite so the kid device joins the encrypted board
+      // and syncs. Absent on a pre-board family → the kid still joins, unsynced.
+      ...(family.boardId && family.familyKey
+        ? { boardId: family.boardId, familyKey: family.familyKey }
+        : {}),
     });
   }, [inviteFor, family, publicKey]);
 
@@ -974,94 +974,71 @@ function KidView({
         </div>
       </section>
 
-      {/* What our family's been up to — the treasury feed, read-only. */}
-      <TreasurySection heading="What we've been up to" />
+      {/* What our family's been up to — the warm, attributable family feed. */}
+      <FamilyFeedSection heading="What we've been up to" />
     </>
   );
 }
 
-// ── Family treasury feed (shared by both roles) ──────────────────────────────
+// ── Family feed (audit issue 11) ─────────────────────────────────────────────
 //
-// The activity feed that used to live on its own "/history" tab. Read-only for
-// everyone. Shows the latest ~6 with a quiet "show all" expander, so the feed
-// never shouts on entry (item 3: calm treatment for both roles).
+// The warm "our family" activity: signed board notices (kid-joined, reward-ready…)
+// fused with this device's own local notes — all attributable, cross-device. This
+// is NOT the raw treasury/chain feed (which shows strangers' deposits and moved to
+// /me → For grown-ups as "Treasury activity: private by design"). Read-only for
+// both roles; latest ~6 with a quiet "show all" expander.
 
 const FEED_PREVIEW = 6;
 
-function TreasurySection({
-  heading = "Family treasury",
+/** In-voice copy + icon for each feed kind. */
+function feedRowCopy(e: FeedEntry): { title: string; icon: typeof GiftIcon; tint: "green" | "purple" | "gold" | "lilac" } {
+  switch (e.kind) {
+    case "kid-joined":
+      return { title: `${e.kidName ?? "A kid"} joined the team 🎉`, icon: UserPlusIcon, tint: "purple" };
+    case "reward-ready":
+      return { title: `A reward is ready${e.kidName ? ` for ${e.kidName}` : ""} 🎁`, icon: GiftIcon, tint: "green" };
+    case "allowance-started":
+      return { title: `Allowance started${e.kidName ? ` for ${e.kidName}` : ""} 💧`, icon: SparkleIcon, tint: "gold" };
+    case "message":
+      return { title: e.text || "A note", icon: SparkleIcon, tint: "lilac" };
+    default:
+      return { title: e.text || "Activity", icon: SparkleIcon, tint: "lilac" };
+  }
+}
+
+function FamilyFeedSection({
+  heading = "Family activity",
 }: {
   heading?: string;
 }) {
-  const { items, truncated, isLoading } = useTreasuryHistory();
+  const feed = useFamilyFeed();
   const [showAll, setShowAll] = useState(false);
 
-  const claimedTotal = useMemo(
-    () =>
-      items
-        .filter((i) => i.kind === "claimed")
-        .reduce((sum, i) => sum + i.amountXlm, 0),
-    [items],
-  );
-
-  const visible = showAll ? items : items.slice(0, FEED_PREVIEW);
-  const hiddenCount = items.length - visible.length;
+  const visible = showAll ? feed : feed.slice(0, FEED_PREVIEW);
+  const hiddenCount = feed.length - visible.length;
 
   return (
     <section className="space-y-3">
       <h2 className="flex items-center gap-1.5 px-1 font-display text-lg font-extrabold">
-        <BankIcon className="size-4 text-m-gold" weight="duotone" />
+        <SparkleIcon className="size-4 text-m-gold" weight="fill" />
         {heading}
       </h2>
 
-      {/* Paid-out total */}
-      <div className="card-pop card-pop-green card-pop-lg flex items-center justify-between p-5 text-primary-foreground">
-        <div>
-          <p className="text-microlabel text-primary-foreground/70">
-            Claimed so far
-          </p>
-          <p className="text-money text-4xl leading-none">
-            {claimedTotal.toFixed(2)}
-            <span className="ml-1.5 align-baseline text-lg font-extrabold text-primary-foreground/80">
-              XLM
-            </span>
-          </p>
-        </div>
-        <span className="flex size-14 items-center justify-center rounded-[17px] border-2 border-m-ink bg-white/25 shadow-[var(--m-pop-sm)]">
-          <GiftIcon className="size-8 text-m-gold" weight="fill" />
-        </span>
-      </div>
-
-      {truncated && (
-        <div className="flex items-center gap-2 card-pop card-pop-sm bg-card/70 px-4 py-3 text-xs font-semibold text-muted-foreground">
-          <WifiSlashIcon className="size-4 shrink-0" weight="bold" />
-          <span>
-            Showing recent activity plus your own rewards. Older history may be
-            beyond the network&apos;s retention window.
-          </span>
-        </div>
-      )}
-
-      {/* Activity list */}
-      {isLoading && items.length === 0 ? (
-        <p className="px-1 text-sm font-semibold text-muted-foreground">
-          Loading treasury activity…
-        </p>
-      ) : items.length === 0 ? (
+      {feed.length === 0 ? (
         <div className="card-pop bg-card/70 p-8 text-center">
-          <IconTile icon={GiftIcon} tint="lilac" size="lg" className="mx-auto" />
+          <IconTile icon={SparkleIcon} tint="lilac" size="lg" className="mx-auto" />
           <p className="mt-2 font-display text-base font-bold text-foreground">
-            No rewards yet
+            Nothing yet
           </p>
-          <p className="mt-1 text-sm font-semibold text-muted-foreground">
-            Fund a reward and it shows up here.
+          <p className="mt-1 text-sm font-semibold text-muted-foreground text-pretty">
+            When a kid joins or a reward goes out, it shows up here.
           </p>
         </div>
       ) : (
         <>
           <div className="space-y-2.5">
-            {visible.map((item) => (
-              <ActivityRow key={item.id} item={item} />
+            {visible.map((e) => (
+              <FeedRow key={e.id} entry={e} />
             ))}
           </div>
           {hiddenCount > 0 && (
@@ -1071,7 +1048,7 @@ function TreasurySection({
               className="press-pop flex w-full items-center justify-center gap-1.5 rounded-full border-2 border-m-ink/25 bg-card/60 py-2.5 font-display text-[13px] font-extrabold text-muted-foreground hover:text-foreground"
             >
               <ListChecksIcon className="size-4" weight="bold" />
-              Show all {items.length}
+              Show all {feed.length}
             </button>
           )}
         </>
@@ -1080,39 +1057,19 @@ function TreasurySection({
   );
 }
 
-function ActivityRow({ item }: { item: HistoryItem }) {
-  const claimed = item.kind === "claimed";
+function FeedRow({ entry }: { entry: FeedEntry }) {
+  const { title, icon, tint } = feedRowCopy(entry);
   return (
     <div className="flex items-center gap-3 card-pop p-3">
-      <IconTile
-        icon={claimed ? SparkleIcon : GiftIcon}
-        tint={claimed ? "green" : "purple"}
-        size="lg"
-        bordered
-      />
+      <IconTile icon={icon} tint={tint} size="lg" bordered />
       <div className="min-w-0 flex-1">
         <p className="truncate font-display text-[15px] font-bold text-foreground">
-          {claimed ? "Reward claimed" : "Reward funded"}
-          {item.mine && (
-            <span className="ml-1.5 align-middle text-[10px] font-extrabold uppercase tracking-wide text-muted-foreground">
-              · you
-            </span>
-          )}
+          {title}
         </p>
         <p className="truncate text-xs font-semibold text-muted-foreground">
-          {formatRelativeTime(new Date(item.timestamp))}
-          {claimed && item.to ? ` · to ${truncateAddress(item.to)}` : ""}
+          {formatRelativeTime(new Date(entry.at))}
         </p>
       </div>
-      <span
-        className={`shrink-0 font-display text-base font-extrabold tabular-nums ${
-          claimed ? "text-m-green-ink" : "text-foreground"
-        }`}
-      >
-        {claimed ? "+" : ""}
-        {item.amountXlm.toFixed(2)}
-        <span className="ml-0.5 text-[11px] font-bold text-muted-foreground">XLM</span>
-      </span>
     </div>
   );
 }

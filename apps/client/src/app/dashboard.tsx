@@ -52,6 +52,7 @@ import {
   loadFamily,
   buildClaimLink,
   importNote,
+  recordLocalNote,
   type Chore,
   type ChoreState,
 } from "@/lib/family";
@@ -894,6 +895,12 @@ function ParentHome({ chores }: { chores: ChoreRow[] }) {
                 onPaid={() => {
                   setChoreState(c.id, kid, "done");
                   setJustFunded((s) => new Set(s).add(nodKey(c.id, kid)));
+                  // Warm, attributable family-feed note (this device's local log).
+                  recordLocalNote({
+                    kind: "reward-ready",
+                    kidName: kid,
+                    text: `A reward for ${kid}: ${c.name}`,
+                  });
                 }}
               />
             ))}

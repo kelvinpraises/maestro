@@ -148,7 +148,10 @@ function SetupPage() {
     else setStep((s) => s - 1);
   };
 
-  const finish = () => {
+  const [creating, setCreating] = useState(false);
+
+  const finish = async () => {
+    if (creating) return;
     const chores = allChores
       .filter((c) => selected.has(c.key))
       .map((c) => ({
@@ -161,12 +164,18 @@ function SetupPage() {
         ...(c.assignee ? { assignee: c.assignee } : {}),
         ...(c.repeat && c.repeat !== "daily" ? { repeat: c.repeat } : {}),
       }));
-    createFamily({
-      name: familyName.trim(),
-      parentAddress: publicKey,
-      kidNames: kids,
-      chores,
-    });
+    // createFamily is async now (it mints the encrypted board's family key).
+    setCreating(true);
+    try {
+      await createFamily({
+        name: familyName.trim(),
+        parentAddress: publicKey,
+        kidNames: kids,
+        chores,
+      });
+    } finally {
+      setCreating(false);
+    }
     toast.success("Your family is ready! 🎉");
     navigate({ to: "/dashboard" });
   };
