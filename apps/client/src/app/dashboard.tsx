@@ -42,7 +42,6 @@ import { IconTile, EmojiTile } from "@/components/atoms/icon-tile";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/atoms/avatar";
 import { Button } from "@/components/atoms/button";
 import { useStellarWallet } from "@/providers/stellar-wallet-provider";
-import { cn } from "@/utils";
 import { useMyRewards, useFundReward } from "@/hooks/use-rewards";
 import {
   useFamily,
@@ -367,20 +366,8 @@ function KidHome({ chores }: { chores: ChoreRow[] }) {
               </ChoreGroup>
             )}
 
-            {/* 3 — Done: out of the active list, struck through and quiet. */}
-            {done.length > 0 && (
-              <ChoreGroup label="Done">
-                {done.map(({ chore: c, status }) => (
-                  <ChoreRowKid
-                    key={c.id}
-                    chore={c}
-                    status={status}
-                    waitingFor={waitingFor}
-                    onOpen={() => openChore(c)}
-                  />
-                ))}
-              </ChoreGroup>
-            )}
+            {/* Done chores just vanish from today's list (they come back next
+                period). No struck-through pile-up, per the owner: gone is gone. */}
           </>
         )}
       </section>
@@ -915,6 +902,13 @@ function ParentHome({ chores }: { chores: ChoreRow[] }) {
     }
     return out;
   }, [chores, statesFor, justFunded]);
+  // Chores still worth showing on the home: anything no kid has finished this
+  // period. Done ones drop off entirely (owner: gone, not piling up); they
+  // reappear next period via freshness. Full list stays on /family to manage.
+  const activeChores = useMemo(
+    () => chores.filter((c) => !Object.values(statesFor(c)).includes("done")),
+    [chores, statesFor],
+  );
   const hasKids = (family?.kidNames.length ?? 0) > 0;
   // Board-synced when this family carries both board coordinates — the reward
   // auto-imports on the kid device, so the funded card says "Sent to their phone".
@@ -1025,31 +1019,30 @@ function ParentHome({ chores }: { chores: ChoreRow[] }) {
             </div>
             <CaretRightIcon className="size-5 text-muted-foreground" weight="bold" />
           </button>
+        ) : activeChores.length === 0 ? (
+          <div className="card-pop bg-m-mint/40 flex items-center gap-3 p-4">
+            <IconTile icon={CheckCircleIcon} tint="green" bordered />
+            <p className="font-display text-[15px] font-extrabold">
+              All caught up for today!
+            </p>
+          </div>
         ) : (
           <div className="space-y-2.5">
-            {chores.map((c) => {
-              // Reflect what the kids have done, so approving a nod visibly
-              // resolves the chore here too (owner ask: it should "move to done").
-              const st = statesFor(c);
-              const doneKids = Object.entries(st).filter(([, s]) => s === "done").map(([k]) => k);
-              const waiting = Object.values(st).some((s) => s === "pending");
-              const isDone = doneKids.length > 0;
+            {activeChores.map((c) => {
+              // Done chores are gone from the overview (they come back next
+              // period); we only show what still needs doing or approving.
+              const waiting = Object.values(statesFor(c)).some((s) => s === "pending");
               return (
-                <div key={c.id} className={cn("card-pop flex items-center gap-3 p-3", isDone && "bg-m-mint/40")}>
+                <div key={c.id} className="card-pop flex items-center gap-3 p-3">
                   {c.emoji ? (
                     <EmojiTile emoji={c.emoji} tint="neutral" bordered />
                   ) : (
                     <IconTile icon={ListChecksIcon} tint="neutral" bordered />
                   )}
-                  <p className={cn("min-w-0 flex-1 truncate font-display text-[15px] font-extrabold", isDone && "text-foreground/55 line-through decoration-2")}>
+                  <p className="min-w-0 flex-1 truncate font-display text-[15px] font-extrabold">
                     {c.name}
                   </p>
-                  {isDone ? (
-                    <span className="inline-flex items-center gap-1 rounded-full border-2 border-m-ink bg-primary/20 px-2.5 py-0.5 text-[13px] font-extrabold text-m-green-ink">
-                      <CheckCircleIcon className="size-3.5" weight="fill" />
-                      {doneKids.length === 1 ? doneKids[0] : `${doneKids.length} done`}
-                    </span>
-                  ) : waiting ? (
+                  {waiting ? (
                     <span className="inline-flex items-center gap-1 rounded-full border border-m-ink/25 bg-m-sky/60 px-2.5 py-0.5 text-[13px] font-extrabold text-m-blue">
                       Waiting
                     </span>
