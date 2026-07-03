@@ -85,8 +85,9 @@ function RewardsPage() {
   // unmounts the instant its note flips to "claimed", so the confetti + count-up
   // have to outlive it here. `celebrate` holds the just-landed amount; the
   // ConfettiBurst self-removes ~1.5s later.
-  const { xlmBalance } = useStellarWallet();
-  const stashBalance = xlmBalance === null ? 0 : parseFloat(xlmBalance);
+  // The stash count-up shows the kid's whole pot (spending + private stash).
+  const { totalBalance } = useStellarWallet();
+  const stashBalance = totalBalance === null ? 0 : parseFloat(totalBalance);
   const displayBalance = useCountUp(stashBalance);
   const [celebrate, setCelebrate] = useState<number | null>(null);
 

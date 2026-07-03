@@ -5,14 +5,18 @@
  * Story: a parent funds a private reward into the family treasury, then a kid
  * claims it privately — a real Groth16 proof is generated in-process (the SAME
  * `src/lib/claims.ts` data layer the browser uses), verified on-chain by the
- * deployed verifier, and real XLM lands in the kid's wallet. A replay of the
- * same note is rejected.
+ * deployed verifier, and real XLM lands in the kid's private STASH. Per the
+ * two-wallet privacy split (context/TWO-WALLET-PRIVACY.md) the claim is proved
+ * for `to = stash` and SUBMITTED BY THE RELAYER, so nothing the kid signs names
+ * the stash on-chain. A replay of the same note is rejected.
  *
  *   ACT 1  Parent funds a reward   → deposit(from, addr20, amount)
  *   ACT 2  Rebuild the claim tree   → leaves() range reads (incl. pre-existing
  *                                     fixture leaf 0), root must be a known root
- *   ACT 3  Kid claims privately     → prove in node, remint(to=kid, …), assert
- *                                     kid XLM balance increased by the reward
+ *   ACT 3  Kid claims privately     → relayer creates the stash reserve, prove
+ *                                     `to = stash` in node, RELAYER submits
+ *                                     remint(to = stash), assert stash XLM rose
+ *                                     by exactly the reward
  *   ACT 4  Replay is rejected       → second remint of the same note panics
  *
  * Throwaway accounts are funded from the local `maestro-deployer` CLI identity
@@ -34,7 +38,13 @@ import {
   contract as StellarContract,
 } from "@stellar/stellar-sdk";
 import { Client as Zwerc20Client } from "zwerc20";
-import { STELLAR_NETWORK, CONTRACT_IDS } from "../src/config/stellar.js";
+import {
+  STELLAR_NETWORK,
+  CONTRACT_IDS,
+  RELAYER,
+  relayerSign,
+} from "../src/config/stellar.js";
+import { ensureStashFunded } from "../src/lib/account.js";
 import {
   deriveNote,
   freshSecret,
@@ -85,6 +95,18 @@ function zwFor(kp: Keypair) {
     networkPassphrase: STELLAR_NETWORK.networkPassphrase,
     contractId: CONTRACT_IDS.zwerc20,
     ...makeSigner(kp),
+  });
+}
+
+// The RELAYER's write client — sources + signs the remint with the relayer key
+// via the SAME helper the app uses, not a kid key.
+function zwRelayer() {
+  return new Zwerc20Client({
+    rpcUrl: STELLAR_NETWORK.rpcUrl,
+    networkPassphrase: STELLAR_NETWORK.networkPassphrase,
+    contractId: CONTRACT_IDS.zwerc20,
+    publicKey: RELAYER.publicKey,
+    signTransaction: relayerSign(),
   });
 }
 
@@ -139,15 +161,19 @@ async function main() {
 
   scene("Participants");
   const parent = Keypair.random();
-  const kid = Keypair.random();
-  console.log(`  ${col.cyan}Parent${col.reset} ${short(parent.publicKey())}`);
-  console.log(`  ${col.cyan}Kid   ${col.reset} ${short(kid.publicKey())}`);
+  const kid = Keypair.random();      // the kid's PUBLIC spending wallet
+  const stash = Keypair.random();    // the kid's PRIVATE stash (reward recipient)
+  console.log(`  ${col.cyan}Parent  ${col.reset} ${short(parent.publicKey())}`);
+  console.log(`  ${col.cyan}Spending${col.reset} ${short(kid.publicKey())}  (public)`);
+  console.log(`  ${col.cyan}Stash   ${col.reset} ${short(stash.publicKey())}  (private, reward recipient)`);
 
   scene("Fund throwaway accounts from maestro-deployer");
   fundFromDeployer(parent.publicKey(), 30);
   info("parent funded with 30 XLM");
+  // The kid's spending wallet is funded only so it's a realistic account; the
+  // RELAYER (not the kid) pays gas for the claim, so this is not strictly needed.
   fundFromDeployer(kid.publicKey(), 5);
-  info("kid funded with 5 XLM (gas only)");
+  info("spending funded with 5 XLM (the relayer, not the kid, pays claim gas)");
 
   // ── ACT 1: parent funds a private reward ────────────────────────────────────
   scene("ACT 1 — Parent funds a private reward (deposit)");
@@ -186,15 +212,29 @@ async function main() {
   const isKnown = (await withRetry(() => zwRead.is_known_root({ root: localRoot }))).result;
   assert(isKnown === true, "rebuilt root is a known root on-chain");
 
-  // ── ACT 3: kid claims privately ─────────────────────────────────────────────
-  scene("ACT 3 — Kid claims privately (prove → remint)");
+  // ── ACT 3: kid claims privately, into the STASH, via the RELAYER ────────────
+  scene("ACT 3 — Kid claims privately (relayer creates stash → prove → relayer remint)");
+
+  // The relayer brings the stash into existence (the SAC transfer needs a live
+  // destination). NOT the kid's spending wallet or the parent — that would link
+  // the stash. This is the exact helper the app's claim path calls.
+  info("relayer creating + funding the stash base reserve (ensureStashFunded)…");
+  const ensured = await withRetry(() => ensureStashFunded(stash.publicKey()));
+  info(`ensureStashFunded → ${JSON.stringify(ensured)}`);
+  assert(
+    ensured.kind === "created" || ensured.kind === "exists",
+    "relayer ensured the stash exists on-chain",
+  );
+
+  const stashBalanceBefore = await xlmBalance(stash.publicKey());
   const kidBalanceBefore = await xlmBalance(kid.publicKey());
-  info(`kid XLM balance before = ${kidBalanceBefore} stroops`);
+  info(`stash    XLM balance before = ${stashBalanceBefore} stroops`);
+  info(`spending XLM balance before = ${kidBalanceBefore} stroops`);
 
   const { pathElements, pathIndices } = tree.proof(leafIndex);
   const witness = buildWitness({
     note,
-    recipient: kid.publicKey(),
+    recipient: stash.publicKey(), // proof binds the payout to the STASH
     root: localRoot,
     pathElements,
     pathIndices,
@@ -207,18 +247,18 @@ async function main() {
 
   // Cross-check snarkjs public signals vs. what the contract will feed the
   // verifier ([root, nullifier, to_field, amount, id=0, redeem=1, relayerFee=0]).
-  const expectedTo = toField(kid.publicKey());
+  const expectedTo = toField(stash.publicKey());
   assert(BigInt(publicSignals[0]) === localRoot, "public signal[0] root matches");
   assert(BigInt(publicSignals[1]) === note.nullifier, "public signal[1] nullifier matches");
-  assert(BigInt(publicSignals[2]) === expectedTo, "public signal[2] to === to_field(kid)");
+  assert(BigInt(publicSignals[2]) === expectedTo, "public signal[2] to === to_field(STASH)");
   assert(BigInt(publicSignals[3]) === REWARD_STROOPS, "public signal[3] amount matches reward");
   assert(publicSignals[4] === "0", "public signal[4] id === 0");
   assert(publicSignals[5] === "1", "public signal[5] redeem === 1");
   assert(publicSignals[6] === "0", "public signal[6] relayerFee === 0");
 
-  const kidZw = zwFor(kid); // kid submits + pays gas; payout goes to kid
-  const remintTx = await kidZw.remint({
-    to: kid.publicKey(),
+  const relayerZw = zwRelayer(); // RELAYER submits + pays gas; payout goes to stash
+  const remintTx = await relayerZw.remint({
+    to: stash.publicKey(),
     amount: REWARD_STROOPS,
     root: localRoot,
     nullifier: note.nullifier,
@@ -229,33 +269,32 @@ async function main() {
   const txHash = (sent as unknown as { sendTransactionResponse?: { hash?: string } })
     .sendTransactionResponse?.hash;
   info(`remint tx hash = ${txHash ?? "(unknown)"}`);
-  pass("remint verified the proof on-chain and paid out");
+  pass("relayer-submitted remint verified the proof on-chain and paid out");
 
+  const stashBalanceAfter = await xlmBalance(stash.publicKey());
   const kidBalanceAfter = await xlmBalance(kid.publicKey());
-  info(`kid XLM balance after = ${kidBalanceAfter} stroops`);
-  const delta = kidBalanceAfter - kidBalanceBefore;
-  info(`balance delta = ${delta} stroops (gas fees make this < reward, but net-positive of fee-adjusted reward)`);
+  const stashDelta = stashBalanceAfter - stashBalanceBefore;
+  const kidDelta = kidBalanceAfter - kidBalanceBefore;
+  info(`stash    balance after = ${stashBalanceAfter} stroops (delta ${stashDelta})`);
+  info(`spending balance after = ${kidBalanceAfter} stroops (delta ${kidDelta})`);
 
-  // The kid paid gas for the remint tx, so raw balance rose by (reward − gas).
-  // The decisive check: the reward's worth of XLM moved from treasury to kid,
-  // i.e. delta + gas ≈ reward. We assert the reward landed by checking the
-  // nullifier is now consumed AND the balance rose by close to the reward.
   const nullifierUsed = (await withRetry(() => zwRead.is_nullifier_used({ nullifier: note.nullifier }))).result;
   assert(nullifierUsed === true, "nullifier consumed on-chain (note spent exactly once)");
 
-  // Balance must have risen by at least (reward − a small gas allowance).
-  const GAS_ALLOWANCE = 2_000_000n; // 0.2 XLM generous ceiling for a Soroban tx
+  // The RELAYER paid gas, so the stash receives the FULL reward with no fee cut.
   assert(
-    delta > REWARD_STROOPS - GAS_ALLOWANCE,
-    `kid balance rose by ~reward (delta ${delta} > reward ${REWARD_STROOPS} − gas ${GAS_ALLOWANCE})`,
+    stashDelta === REWARD_STROOPS,
+    `stash balance rose by exactly the reward (delta ${stashDelta} == reward ${REWARD_STROOPS})`,
   );
+  // The kid's public spending wallet paid no gas and received nothing here.
+  assert(kidDelta === 0n, `spending balance unchanged by the claim (delta ${kidDelta} == 0)`);
 
   // ── ACT 4: replay is rejected ───────────────────────────────────────────────
   scene("ACT 4 — Replay of the same note is rejected");
   let replayRejected = false;
   try {
-    const replayTx = await kidZw.remint({
-      to: kid.publicKey(),
+    const replayTx = await zwRelayer().remint({
+      to: stash.publicKey(),
       amount: REWARD_STROOPS,
       root: localRoot,
       nullifier: note.nullifier,

@@ -35,7 +35,7 @@ import {
   Horizon,
   rpc as StellarRpc,
 } from "@stellar/stellar-sdk";
-import { STELLAR_NETWORK } from "@/config/stellar";
+import { STELLAR_NETWORK, relayerKeypair } from "@/config/stellar";
 import { classifyTxError } from "@/lib/tx-errors";
 
 const { networkPassphrase, horizonUrl, rpcUrl } = STELLAR_NETWORK;
@@ -252,6 +252,33 @@ export async function ensureAccountFunded(
 
   inflight.set(to, run);
   return run;
+}
+
+/**
+ * Bring a kid's private `stash` account into existence, funded by the RELAYER.
+ *
+ * The reward `remint` pays real XLM to the stash via the native SAC `transfer`,
+ * which needs the stash to exist on-chain first. Per the privacy design
+ * (context/TWO-WALLET-PRIVACY.md) the stash must be created by the neutral,
+ * shared relayer — NOT by the kid's spending wallet or the parent — because a
+ * `spending → stash` (or `parent → stash`) createAccount would publicly link the
+ * private stash back to a known identity. `relayer → stash` reveals only "the
+ * relayer made an account", which is true of every claim across every family.
+ *
+ * Idempotent (delegates to `ensureAccountFunded`): a no-op if the stash already
+ * exists, coalesces concurrent callers, and never throws — it resolves an
+ * EnsureResult the caller branches on. ~3 XLM starting balance (base reserve +
+ * headroom), matching DEFAULT_STARTING_XLM.
+ */
+export async function ensureStashFunded(
+  stashAddress: string,
+  startingXlm: number = DEFAULT_STARTING_XLM,
+): Promise<EnsureResult> {
+  return ensureAccountFunded({
+    from: relayerKeypair(),
+    to: stashAddress,
+    startingXlm,
+  });
 }
 
 /** Format an XLM number as a Horizon/`createAccount` amount string (7 dp, no

@@ -30,16 +30,8 @@ import {
 } from "@/lib/claims";
 import { xlmToStroops, stroopsToXlm } from "@/lib/allowance";
 import { classifyTxError, retryTransient } from "@/lib/tx-errors";
-import { accountExists } from "@/lib/account";
-
-/**
- * Sentinel thrown when the kid's OWN wallet doesn't exist on-chain yet, so it
- * can't pay the fee to submit the claim. This is NOT a money-tx failure — no tx
- * was attempted — so it bypasses classifyTxError and gets its own kid-safe line
- * ("ask your grown-up"). The parent's join-time account bootstrap normally
- * prevents this; it covers the edge where a kid device is unfunded at claim time.
- */
-const KID_ACCOUNT_MISSING = "maestro:kid-account-missing";
+import { ensureStashFunded } from "@/lib/account";
+import { RELAYER, relayerSign } from "@/config/stellar";
 
 // ── local note storage (demo-grade) ──────────────────────────────────────────
 
@@ -213,7 +205,11 @@ export type ClaimStep =
 
 export interface ClaimRewardParams {
   note: ClaimNote;
-  /** Where the reward is paid. Defaults to the kid's own wallet. */
+  /**
+   * Where the reward is paid. Defaults to the kid's PRIVATE STASH — the whole
+   * point of the split. Callers should almost never override this; it exists
+   * only for edge tooling.
+   */
   to?: string;
 }
 
@@ -222,38 +218,33 @@ export interface ClaimRewardResult {
 }
 
 /**
- * Kid claims a reward privately: rebuild the treasury's Merkle tree from
- * on-chain leaves (incl. any pre-existing leaves), generate the Groth16 proof
- * in the browser, and remint — paying real XLM to the recipient. Refreshes the
- * wallet balance on success. Proof generation is CPU-bound (~10s+).
+ * Kid claims a reward privately, into their STASH, via the RELAYER.
+ *
+ * Privacy design (context/TWO-WALLET-PRIVACY.md): the reward is proved for
+ * `to = stash` in-browser, then a neutral shared RELAYER submits the
+ * `remint(to = stash)` — the tx is sourced + signed by the relayer key, NOT by
+ * the kid. `zwerc20::remint` has no `require_auth`, so any account may submit it;
+ * the proof binds the payout to `stash`, so the relayer can only pay gas and
+ * forward an unstealable payout. On-chain the claim comes from the relayer (the
+ * anonymity set) and lands in a fresh stash the relayer paid — nothing links it
+ * to this kid. The kid's spending wallet signs nothing here (and need not exist).
+ *
+ * Rebuilds the treasury's Merkle tree from on-chain leaves, generates the
+ * Groth16 proof (CPU-bound, ~10s+), ensures the stash's base reserve exists
+ * (relayer-funded), then remints. Refreshes the wallet balance on success.
  */
 export function useClaimReward() {
   const queryClient = useQueryClient();
-  const { publicKey, signTransaction, refreshBalance } = useStellarWallet();
+  const { stash, refreshBalance } = useStellarWallet();
   const [step, setStep] = useState<ClaimStep>("idle");
 
   const mutation = useMutation<ClaimRewardResult, Error, ClaimRewardParams>({
     mutationFn: async ({ note, to }) => {
-      const recipient = to?.trim() || publicKey;
+      // The reward lands in the private stash by default. No kid-owned wallet
+      // signs or is named on-chain for this claim.
+      const recipient = to?.trim() || stash.publicKey;
       const amountStroops = BigInt(note.amountStroops);
       const derived = deriveNote(BigInt(note.secret), amountStroops);
-
-      // 0) The kid submits + pays the fee for this claim from THEIR OWN wallet.
-      //    If that wallet doesn't exist on-chain yet (unfunded — no base
-      //    reserve), the tx can't even be submitted. Catch it here with an
-      //    honest "ask your grown-up" instead of letting it fail deep in submit
-      //    and mislabel a fixable setup gap as a claim reject. The parent's
-      //    join-time account bootstrap normally covers this; this guards the edge
-      //    where the kid device is still unfunded. A transient network hiccup on
-      //    the existence check is ignored (we let the claim proceed and retry).
-      try {
-        if (!(await accountExists(publicKey))) {
-          throw new Error(KID_ACCOUNT_MISSING);
-        }
-      } catch (err) {
-        if (err instanceof Error && err.message === KID_ACCOUNT_MISSING) throw err;
-        // Existence check itself failed (network) — don't block the claim on it.
-      }
 
       // 1) Rebuild the tree from on-chain leaves (paginated, includes pre-existing).
       setStep("rebuilding");
@@ -261,7 +252,7 @@ export function useClaimReward() {
       const root = tree.root;
       const { pathElements, pathIndices } = tree.proof(note.leafIndex);
 
-      // 2) Prove in the browser.
+      // 2) Prove in the browser (binds the payout to `recipient` = stash).
       setStep("proving");
       const witness = buildWitness({
         note: derived,
@@ -272,14 +263,30 @@ export function useClaimReward() {
       });
       const { proofBytes } = await generateProof(witness);
 
-      // 3) Remint (pays real XLM to the recipient). Wrapped in a transient-only
-      //    retry: a network/RPC blip on submit gets another turn with backoff,
-      //    but a deterministic ledger reject (e.g. this note already claimed) is
-      //    surfaced immediately — never dressed up as "busy, try again". The
-      //    proof + root are computed once above and reused; only the single-use
-      //    AssembledTransaction is rebuilt per attempt. Crypto/tx logic unchanged.
+      // 3) Ensure the stash exists on-chain (the SAC transfer needs a live
+      //    destination). The RELAYER creates + funds its base reserve — never
+      //    the spending wallet or the parent, which would publicly link the
+      //    stash. Idempotent + never throws; a deterministic failure (relayer
+      //    bank empty) is surfaced, a transient one is retried below with submit.
       setStep("submitting");
-      const { zwerc20 } = withSigner({ publicKey, signTransaction });
+      if (recipient === stash.publicKey) {
+        const ensured = await ensureStashFunded(stash.publicKey);
+        if (ensured.kind === "error" && !ensured.transient) {
+          throw new Error(`stash setup failed: ${ensured.detail}`);
+        }
+      }
+
+      // 4) Remint, SUBMITTED BY THE RELAYER (its key sources + signs the tx).
+      //    Wrapped in a transient-only retry: a network/RPC blip on submit gets
+      //    another turn with backoff, but a deterministic ledger reject (e.g.
+      //    this note already claimed) is surfaced immediately — never dressed up
+      //    as "busy, try again". The proof + root are computed once above and
+      //    reused; only the single-use AssembledTransaction is rebuilt per
+      //    attempt. `relayer_fee = 0` as today (the demo relayer takes no cut).
+      const { zwerc20 } = withSigner({
+        publicKey: RELAYER.publicKey,
+        signTransaction: relayerSign(),
+      });
       const proof = Buffer.from(proofBytes);
       await retryTransient(async () => {
         const tx = await zwerc20.remint({
@@ -311,14 +318,11 @@ export function useClaimReward() {
   // Kid-safe, truthful copy for the failure card — distinguishes a genuine
   // network blip ("bank line is busy … try again") from a deterministic reject
   // (already claimed / not enough in the bank), rather than lying "try again" at
-  // something that can't succeed. The account-missing sentinel gets its own line
-  // (no tx was attempted — it's a setup gap, not a money failure). Null until
-  // there's an error to describe.
+  // something that can't succeed. The relayer pays gas now, so there is no
+  // longer a kid-wallet-unfunded case to special-case here. Null until there's
+  // an error to describe.
   const errorMessage = mutation.error
-    ? mutation.error instanceof Error &&
-      mutation.error.message === KID_ACCOUNT_MISSING
-      ? "Your account isn't set up yet. Ask your grown-up to finish setting it up, then try again."
-      : classifyTxError(mutation.error, "claim").kidMessage
+    ? classifyTxError(mutation.error, "claim").kidMessage
     : null;
 
   return { ...mutation, step, reset, errorMessage };

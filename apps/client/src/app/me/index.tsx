@@ -90,7 +90,7 @@ export const Route = createFileRoute("/me/")({
 });
 
 function MePage() {
-  const { publicKey, xlmBalance } = useStellarWallet();
+  const { publicKey, totalBalance } = useStellarWallet();
   const { family, role } = useFamily();
 
   const displayName =
@@ -98,8 +98,9 @@ function MePage() {
     (family?.name?.trim() ? family.name.trim() : "You");
   const myName = family?.kidName?.trim() || displayName;
 
-  // Real XLM balance is the stash (unfunded is a valid 0, not an error).
-  const stashBalance = xlmBalance === null ? null : parseFloat(xlmBalance);
+  // The stash is the kid's WHOLE pot: spending + private stash summed as one
+  // number (two unlinked addresses on-chain). Unfunded is a valid 0.
+  const stashBalance = totalBalance === null ? null : parseFloat(totalBalance);
 
   // Real goals (kid-set, a list with one active) + real streak (from the done
   // log). No more Lego sample; no more one-goal cap.
@@ -173,11 +174,7 @@ function MePage() {
       <GoalsSection balance={stashBalance} goals={goals} />
 
       {/* For grown-ups — quiet, collapsed. Plumbing lives here, never up top. */}
-      <GrownupsPanel
-        publicKey={publicKey}
-        xlmBalance={xlmBalance}
-        isParent={role === "parent"}
-      />
+      <GrownupsPanel publicKey={publicKey} isParent={role === "parent"} />
     </div>
   );
 }
@@ -523,15 +520,13 @@ function GoalDialog({
 
 function GrownupsPanel({
   publicKey,
-  xlmBalance,
   isParent,
 }: {
   publicKey: string;
-  xlmBalance: string | null;
   isParent: boolean;
 }) {
   const navigate = useNavigate();
-  const { fund, isFunding } = useStellarWallet();
+  const { fund, isFunding, totalBalance } = useStellarWallet();
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -597,17 +592,27 @@ function GrownupsPanel({
             </button>
           )}
 
-          {/* XLM balance */}
+          {/* XLM balance — the combined pot (spending + private stash). */}
           <div className="flex items-center justify-between rounded-2xl border-2 border-m-ink bg-card px-4 py-3">
             <span className="text-sm font-bold text-muted-foreground">
               XLM balance
             </span>
             <span className="rounded-full border-2 border-m-ink bg-m-butter px-3 py-1 text-xs font-extrabold tabular-nums text-foreground">
-              {xlmBalance === null
+              {totalBalance === null
                 ? "…"
-                : `${parseFloat(xlmBalance).toFixed(2)} XLM`}
+                : `${parseFloat(totalBalance).toFixed(2)} XLM`}
             </span>
           </div>
+
+          {/* Honest privacy note (grown-ups only): why rewards look separate. No
+              em-dashes in user-facing copy per the product vocabulary rule. */}
+          {!isParent && (
+            <p className="rounded-2xl border-2 border-m-ink/10 bg-card/60 px-4 py-3 text-[12px] font-semibold leading-snug text-muted-foreground">
+              Rewards land in a separate address that a neutral relayer pays, so
+              the public ledger can&apos;t tell which kid claimed a reward. Your
+              stash shown here adds both addresses into one number.
+            </p>
+          )}
 
           {/* Testnet top-up */}
           <button

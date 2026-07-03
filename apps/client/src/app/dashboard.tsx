@@ -165,7 +165,7 @@ function KidHome({ chores }: { chores: ChoreRow[] }) {
   const navigate = useNavigate();
   const { family } = useFamily();
   const { setChoreState, stateFor } = useChoreStates();
-  const { publicKey, xlmBalance } = useStellarWallet();
+  const { publicKey, totalBalance } = useStellarWallet();
 
   const kidName = family?.kidName?.trim() || "there";
   // The name this kid device acts as when marking chores. Falls back to the
@@ -197,10 +197,11 @@ function KidHome({ chores }: { chores: ChoreRow[] }) {
   const totalMine = mine.length + anyone.length + done.length;
   const choresLeft = mine.length + anyone.length;
 
-  // Real XLM balance drives the stash card. Unfunded is a valid 0, not an error.
+  // The stash card shows the kid's WHOLE pot: spending + private stash summed as
+  // one number (on-chain they're two unlinked addresses). Unfunded is a valid 0.
   const stashBalance = useMemo(
-    () => (xlmBalance === null ? null : parseFloat(xlmBalance)),
-    [xlmBalance],
+    () => (totalBalance === null ? null : parseFloat(totalBalance)),
+    [totalBalance],
   );
 
   // The kid-set savings goal (name + target). Null until the kid names one on
