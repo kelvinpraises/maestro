@@ -17,8 +17,17 @@ import {
   emitFamilyChanged,
   emitChoreStatesChanged,
   effectiveChoreState,
+  recordDone,
+  loadDoneLog,
+  streakForKid,
+  loadGoal,
+  saveGoal as persistGoal,
+  scoopedXlmWithin,
   FAMILY_EVENT,
   CHORE_STATE_EVENT,
+  DONE_LOG_EVENT,
+  GOAL_EVENT,
+  SCOOP_LOG_EVENT,
   randomId,
   type Family,
   type Chore,
@@ -26,6 +35,7 @@ import {
   type ChoreStates,
   type ChoreStateEntry,
   type InvitePayload,
+  type SavingsGoal,
 } from "@/lib/family";
 
 // ── useFamily — the family membership on this device ─────────────────────────
@@ -176,15 +186,20 @@ export function useChoreStates() {
       if (!name) return;
       const cur = loadChoreStates();
       const forChore = { ...(cur[choreId] ?? {}) };
+      const now = Date.now();
       if (state === null || state === "todo") {
         delete forChore[name];
       } else {
-        forChore[name] = { state, at: Date.now() };
+        forChore[name] = { state, at: now };
       }
       const next: ChoreStates = { ...cur, [choreId]: forChore };
       // Prune an emptied chore map so absence stays clean.
       if (Object.keys(forChore).length === 0) delete next[choreId];
       saveChoreStates(next);
+      // Every "done" — whoever records it (the parent-approve path today, a
+      // kid-side path later) — appends to the append-only done log here, the one
+      // chokepoint. Streaks read that log, not this current-period map.
+      if (state === "done") recordDone(choreId, name, now);
       emitChoreStatesChanged();
       setStates(next);
     },
@@ -221,4 +236,81 @@ export function useChoreStates() {
   );
 
   return { states, setChoreState, statesFor, stateFor };
+}
+
+// ── useKidStreak — real consecutive-days streak from the done log ─────────────
+//
+// Recomputes on the done-log change event (a fresh done) and cross-tab storage.
+// Returns 0 when the streak has lapsed or there's no history; callers render
+// nothing on 0 (no sad zero).
+
+export function useKidStreak(kidName: string | undefined): number {
+  const name = kidName?.trim() ?? "";
+  const compute = useCallback(
+    () => (name ? streakForKid(name, loadDoneLog()) : 0),
+    [name],
+  );
+  const [streak, setStreak] = useState<number>(() =>
+    typeof window === "undefined" ? 0 : compute(),
+  );
+  useEffect(() => {
+    const reload = () => setStreak(compute());
+    reload(); // name may have changed
+    window.addEventListener(DONE_LOG_EVENT, reload);
+    window.addEventListener(CHORE_STATE_EVENT, reload);
+    window.addEventListener("storage", reload);
+    return () => {
+      window.removeEventListener(DONE_LOG_EVENT, reload);
+      window.removeEventListener(CHORE_STATE_EVENT, reload);
+      window.removeEventListener("storage", reload);
+    };
+  }, [compute]);
+  return streak;
+}
+
+// ── useSavingsGoal — the kid-set goal (name + target), per device ────────────
+//
+// One store feeds both the /me goal card and the stash mini-card's goal line.
+// `null` = no goal set yet (empty state / hidden line).
+
+export function useSavingsGoal() {
+  const [goal, setGoal] = useState<SavingsGoal | null>(() =>
+    typeof window === "undefined" ? null : loadGoal(),
+  );
+  useEffect(() => {
+    const reload = () => setGoal(loadGoal());
+    window.addEventListener(GOAL_EVENT, reload);
+    window.addEventListener("storage", reload);
+    return () => {
+      window.removeEventListener(GOAL_EVENT, reload);
+      window.removeEventListener("storage", reload);
+    };
+  }, []);
+  const setSavingsGoal = useCallback((next: SavingsGoal | null) => {
+    persistGoal(next);
+    setGoal(next);
+  }, []);
+  return { goal, setSavingsGoal };
+}
+
+// ── useScoopedThisWeek — XLM scooped in the last 7 days, from the scoop log ───
+//
+// Added to claimed-reward XLM (in the screen) to form "earned this week" so the
+// number matches what the kid watched land (audit issue 5).
+
+export function useScoopedThisWeek(): number {
+  const compute = useCallback(() => scoopedXlmWithin(), []);
+  const [xlm, setXlm] = useState<number>(() =>
+    typeof window === "undefined" ? 0 : compute(),
+  );
+  useEffect(() => {
+    const reload = () => setXlm(compute());
+    window.addEventListener(SCOOP_LOG_EVENT, reload);
+    window.addEventListener("storage", reload);
+    return () => {
+      window.removeEventListener(SCOOP_LOG_EVENT, reload);
+      window.removeEventListener("storage", reload);
+    };
+  }, [compute]);
+  return xlm;
 }

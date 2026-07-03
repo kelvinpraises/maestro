@@ -13,6 +13,7 @@
 import { useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { drips as dripsRead, withSigner } from "@/contracts/stellar";
+import { recordScoop } from "@/lib/family";
 import { CONTRACT_IDS } from "@/config/stellar";
 import { useStellarWallet } from "@/providers/stellar-wallet-provider";
 import {
@@ -265,7 +266,11 @@ export function useCollectAllowance() {
 
       return { received, collected };
     },
-    onSuccess: async () => {
+    onSuccess: async ({ collected }) => {
+      // Record the scoop so "earned this week" counts allowance the kid watched
+      // land, not just claimed rewards (audit issue 5). Only a positive collect
+      // is worth logging.
+      if (collected > 0n) recordScoop(collected.toString());
       await refreshBalance();
       queryClient.invalidateQueries({ queryKey: ["allowance-state"] });
     },

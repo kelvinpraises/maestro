@@ -25,12 +25,26 @@ import {
   WrenchIcon,
   LockIcon,
   DropIcon,
+  PencilSimpleIcon,
+  MinusIcon,
+  PlusIcon,
 } from "@phosphor-icons/react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/atoms/avatar";
 import { IconTile } from "@/components/atoms/icon-tile";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/molecules/dialog";
+import { Button } from "@/components/atoms/button";
+import { Input } from "@/components/atoms/input";
 import { toast } from "sonner";
 import { useStellarWallet } from "@/providers/stellar-wallet-provider";
-import { useFamily } from "@/hooks/use-family";
+import { useFamily, useKidStreak, useSavingsGoal } from "@/hooks/use-family";
+import { GOAL_NAME_MAX, type SavingsGoal } from "@/lib/family";
 import { truncateAddress } from "@/utils";
 
 export const Route = createFileRoute("/me/")({
@@ -44,14 +58,14 @@ function MePage() {
   const displayName =
     family?.kidName?.trim() ||
     (family?.name?.trim() ? family.name.trim() : "You");
+  const myName = family?.kidName?.trim() || displayName;
 
   // Real XLM balance is the stash (unfunded is a valid 0, not an error).
   const stashBalance = xlmBalance === null ? null : parseFloat(xlmBalance);
 
-  // Hardcoded sample goal + streak (labelled clearly as samples in the UI).
-  const goalName = "New Lego Set";
-  const goalTarget = 25;
-  const streakDays = 6;
+  // Real goal (kid-set) + real streak (from the done log). No more Lego sample.
+  const { goal, setSavingsGoal } = useSavingsGoal();
+  const streakDays = useKidStreak(myName);
 
   return (
     <div className="stagger-rise space-y-5">
@@ -93,31 +107,30 @@ function MePage() {
         </div>
       </div>
 
-      {/* Goal + streak — a two-up of proud, clearly-labelled cards. */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="animate-pop-in card-pop card-pop-lilac p-4">
-          <IconTile icon={TargetIcon} tint="purple" bordered />
-          <p className="text-microlabel mt-3 text-muted-foreground">Saving for</p>
-          <p className="truncate font-display text-[15px] font-extrabold leading-tight">
-            {goalName}
-          </p>
-          <p className="mt-0.5 font-display text-sm font-extrabold tabular-nums text-m-purple">
-            {goalTarget.toFixed(0)} XLM
-          </p>
-        </div>
-        <div className="animate-pop-in card-pop card-pop-pink p-4">
-          <IconTile icon={FireIcon} tint="pink" bordered />
-          <p className="text-microlabel mt-3 text-muted-foreground">Streak</p>
-          <p className="font-display text-2xl font-extrabold leading-tight tabular-nums text-m-pink">
-            {streakDays}
-            <span className="ml-1 text-sm font-extrabold text-muted-foreground">
-              days
-            </span>
-          </p>
-          <p className="mt-0.5 text-[12px] font-bold text-muted-foreground">
-            Keep it going!
-          </p>
-        </div>
+      {/* Goal + streak. The goal is real (kid-set); the streak renders only when
+          it's live — a zero streak is a sad zero, so it hides entirely. When the
+          streak hides, the goal card takes the full width. */}
+      <div className={streakDays > 0 ? "grid grid-cols-2 gap-3" : ""}>
+        <GoalCard
+          balance={stashBalance}
+          goal={goal}
+          onSave={setSavingsGoal}
+        />
+        {streakDays > 0 && (
+          <div className="animate-pop-in card-pop card-pop-pink p-4">
+            <IconTile icon={FireIcon} tint="pink" bordered />
+            <p className="text-microlabel mt-3 text-muted-foreground">Streak</p>
+            <p className="font-display text-2xl font-extrabold leading-tight tabular-nums text-m-pink">
+              {streakDays}
+              <span className="ml-1 text-sm font-extrabold text-muted-foreground">
+                {streakDays === 1 ? "day" : "days"}
+              </span>
+            </p>
+            <p className="mt-0.5 text-[12px] font-bold text-muted-foreground">
+              Keep it going!
+            </p>
+          </div>
+        )}
       </div>
 
       {/* For grown-ups — quiet, collapsed. Plumbing lives here, never up top. */}
@@ -127,6 +140,217 @@ function MePage() {
         isParent={role === "parent"}
       />
     </div>
+  );
+}
+
+// ── Goal card — real, kid-set. Empty until named; a quiet pencil edits it. ────
+
+function GoalCard({
+  balance,
+  goal,
+  onSave,
+}: {
+  balance: number | null;
+  goal: SavingsGoal | null;
+  onSave: (goal: SavingsGoal | null) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+
+  // No goal yet → the invite to set one ("What are you saving for?").
+  if (!goal) {
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="animate-pop-in press-pop card-pop card-pop-lilac flex w-full flex-col items-start p-4 text-left"
+        >
+          <IconTile icon={TargetIcon} tint="purple" bordered />
+          <p className="text-microlabel mt-3 text-muted-foreground">Saving for</p>
+          <p className="font-display text-[15px] font-extrabold leading-tight text-m-purple">
+            What are you saving for?
+          </p>
+          <p className="mt-0.5 text-[12px] font-bold text-muted-foreground">
+            Tap to set a goal
+          </p>
+        </button>
+        <GoalDialog
+          open={editing}
+          initial={null}
+          onOpenChange={setEditing}
+          onSave={onSave}
+        />
+      </>
+    );
+  }
+
+  // Real progress: balance / target, capped at 100%.
+  const pct =
+    balance === null || goal.targetXlm <= 0
+      ? 0
+      : Math.min(100, Math.round((balance / goal.targetXlm) * 100));
+
+  return (
+    <>
+      <div className="animate-pop-in card-pop card-pop-lilac relative p-4">
+        <div className="flex items-start justify-between">
+          <IconTile icon={TargetIcon} tint="purple" bordered />
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            aria-label="Edit goal"
+            className="press-pop -mr-1 -mt-1 flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-white/50 hover:text-foreground"
+          >
+            <PencilSimpleIcon className="size-4" weight="bold" />
+          </button>
+        </div>
+        <p className="text-microlabel mt-3 text-muted-foreground">Saving for</p>
+        <p className="truncate font-display text-[15px] font-extrabold leading-tight">
+          {goal.name}
+        </p>
+        <p className="mt-0.5 font-display text-sm font-extrabold tabular-nums text-m-purple">
+          {goal.targetXlm.toFixed(0)} XLM
+        </p>
+        {/* Real progress bar. */}
+        <div className="mt-2.5 h-2.5 w-full overflow-hidden rounded-full border-2 border-m-ink bg-white/60">
+          <div
+            className="h-full rounded-full bg-m-purple transition-[width] duration-500 ease-[var(--ease-out-pop)] motion-reduce:transition-none"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        <p className="mt-1 text-[11px] font-extrabold tabular-nums text-m-purple">
+          {pct}%
+        </p>
+      </div>
+      <GoalDialog
+        open={editing}
+        initial={goal}
+        onOpenChange={setEditing}
+        onSave={onSave}
+      />
+    </>
+  );
+}
+
+/** The small set-a-goal dialog: name (≤24 chars) + target XLM stepper. */
+function GoalDialog({
+  open,
+  initial,
+  onOpenChange,
+  onSave,
+}: {
+  open: boolean;
+  initial: SavingsGoal | null;
+  onOpenChange: (open: boolean) => void;
+  onSave: (goal: SavingsGoal | null) => void;
+}) {
+  const [name, setName] = useState(initial?.name ?? "");
+  const [target, setTarget] = useState<number>(initial?.targetXlm ?? 25);
+
+  // Re-seed the fields each time the dialog opens (initial may have changed).
+  const [wasOpen, setWasOpen] = useState(false);
+  if (open && !wasOpen) {
+    setName(initial?.name ?? "");
+    setTarget(initial?.targetXlm ?? 25);
+    setWasOpen(true);
+  } else if (!open && wasOpen) {
+    setWasOpen(false);
+  }
+
+  const trimmed = name.trim().slice(0, GOAL_NAME_MAX);
+  const canSave = trimmed.length > 0 && target > 0;
+  const step = (delta: number) =>
+    setTarget((t) => Math.max(1, Math.min(9999, t + delta)));
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <div className="mx-auto mb-1">
+            <IconTile icon={TargetIcon} tint="purple" size="lg" bordered />
+          </div>
+          <DialogTitle className="text-center">
+            {initial ? "Update your goal" : "What are you saving for?"}
+          </DialogTitle>
+          <DialogDescription className="text-center">
+            Pick a name and how much it costs. We&apos;ll show how close you are.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <div>
+            <label
+              htmlFor="goal-name"
+              className="text-microlabel mb-1.5 block px-1 text-muted-foreground"
+            >
+              Goal
+            </label>
+            <Input
+              id="goal-name"
+              value={name}
+              maxLength={GOAL_NAME_MAX}
+              placeholder="A new skateboard"
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <span className="text-microlabel mb-1.5 block px-1 text-muted-foreground">
+              Target
+            </span>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => step(-5)}
+                aria-label="Less"
+                className="press-pop flex size-11 shrink-0 items-center justify-center rounded-full border-2 border-m-ink bg-card text-foreground shadow-[var(--m-pop-sm)]"
+              >
+                <MinusIcon className="size-5" weight="bold" />
+              </button>
+              <div className="flex-1 rounded-2xl border-2 border-m-ink bg-white/70 py-2 text-center">
+                <span className="font-display text-2xl font-extrabold tabular-nums">
+                  {target}
+                </span>
+                <span className="ml-1 text-sm font-extrabold text-muted-foreground">
+                  XLM
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => step(5)}
+                aria-label="More"
+                className="press-pop flex size-11 shrink-0 items-center justify-center rounded-full border-2 border-m-ink bg-card text-foreground shadow-[var(--m-pop-sm)]"
+              >
+                <PlusIcon className="size-5" weight="bold" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter>
+          {initial && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                onSave(null);
+                onOpenChange(false);
+              }}
+            >
+              Clear
+            </Button>
+          )}
+          <Button
+            disabled={!canSave}
+            onClick={() => {
+              onSave({ name: trimmed, targetXlm: target });
+              onOpenChange(false);
+            }}
+          >
+            {initial ? "Save" : "Set goal"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

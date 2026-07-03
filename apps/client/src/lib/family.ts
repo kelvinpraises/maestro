@@ -230,6 +230,217 @@ export function saveChoreStates(states: ChoreStates): void {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+//  Done log — append-only history of every chore "done", per kid. Streak lives
+//  here (consecutive calendar days with ≥1 done), not in the freshness-derived
+//  states map (which only ever holds the CURRENT period). Capped so a long-lived
+//  device can't grow it without bound. Every done write (kid-side or the
+//  parent-approve path) funnels through setChoreState → recordDone here.
+//    Shape: [{ choreId, kidName, at }]  (newest appended last)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const DONE_LOG_STORAGE_KEY = "maestro.done-log.v1";
+export const DONE_LOG_EVENT = "maestro:done-log-changed";
+/** Keep the tail — enough for any real streak, small enough to stay cheap. */
+const DONE_LOG_CAP = 500;
+
+export interface DoneLogEntry {
+  choreId: string;
+  kidName: string;
+  /** Unix ms the done was recorded. */
+  at: number;
+}
+
+export function loadDoneLog(): DoneLogEntry[] {
+  try {
+    const raw = localStorage.getItem(DONE_LOG_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as DoneLogEntry[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Append one done to the log (capped, newest last). Emits a same-tab change
+ * event so open streak views refresh. Called from setChoreState whenever a
+ * "done" is recorded, so every done path logs exactly once.
+ */
+export function recordDone(choreId: string, kidName: string, at: number = Date.now()): void {
+  const name = kidName.trim();
+  if (!name) return;
+  try {
+    const log = loadDoneLog();
+    log.push({ choreId, kidName: name, at });
+    const capped = log.length > DONE_LOG_CAP ? log.slice(log.length - DONE_LOG_CAP) : log;
+    localStorage.setItem(DONE_LOG_STORAGE_KEY, JSON.stringify(capped));
+    if (typeof window !== "undefined") window.dispatchEvent(new Event(DONE_LOG_EVENT));
+  } catch {
+    /* non-fatal in the demo */
+  }
+}
+
+/**
+ * The current streak for one kid: consecutive local calendar days, ending today
+ * OR yesterday, on each of which the kid has ≥1 done-log entry. Returns 0 when
+ * the most recent done is older than yesterday (the streak has lapsed) or there
+ * is no history. A zero streak renders nothing (no sad zero) — callers guard.
+ */
+export function streakForKid(
+  kidName: string,
+  log: DoneLogEntry[] = loadDoneLog(),
+  now: number = Date.now(),
+): number {
+  const name = kidName.trim();
+  if (!name) return 0;
+  // Set of local day-keys this kid did ≥1 chore on.
+  const days = new Set<string>();
+  for (const e of log) {
+    if (e.kidName === name) days.add(dayKey(e.at));
+  }
+  if (days.size === 0) return 0;
+
+  const MS_DAY = 24 * 60 * 60 * 1000;
+  const today = dayKey(now);
+  const yesterday = dayKey(now - MS_DAY);
+  // The streak must be "live": its latest day is today or yesterday, else 0.
+  let cursor: number;
+  if (days.has(today)) cursor = now;
+  else if (days.has(yesterday)) cursor = now - MS_DAY;
+  else return 0;
+
+  let count = 0;
+  while (days.has(dayKey(cursor))) {
+    count++;
+    cursor -= MS_DAY;
+  }
+  return count;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Scoop log — append-only record of allowance the kid scooped into their stash.
+//  "Earned this week" = claimed rewards (use-rewards) + scoops in the last 7
+//  days, so the number matches what the kid watched happen (audit issue 5).
+//    Shape: [{ amountStroops, at }]  (amountStroops a decimal string bigint)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const SCOOP_LOG_STORAGE_KEY = "maestro.scoop-log.v1";
+export const SCOOP_LOG_EVENT = "maestro:scoop-log-changed";
+const SCOOP_LOG_CAP = 500;
+
+export interface ScoopLogEntry {
+  /** Collected amount in stroops (decimal-string bigint — never a JS number). */
+  amountStroops: string;
+  /** Unix ms the scoop landed. */
+  at: number;
+}
+
+export function loadScoopLog(): ScoopLogEntry[] {
+  try {
+    const raw = localStorage.getItem(SCOOP_LOG_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as ScoopLogEntry[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Record one successful scoop (capped, newest last) + emit a change event. */
+export function recordScoop(amountStroops: string, at: number = Date.now()): void {
+  try {
+    const log = loadScoopLog();
+    log.push({ amountStroops, at });
+    const capped = log.length > SCOOP_LOG_CAP ? log.slice(log.length - SCOOP_LOG_CAP) : log;
+    localStorage.setItem(SCOOP_LOG_STORAGE_KEY, JSON.stringify(capped));
+    if (typeof window !== "undefined") window.dispatchEvent(new Event(SCOOP_LOG_EVENT));
+  } catch {
+    /* non-fatal */
+  }
+}
+
+/**
+ * Total XLM scooped in the last `withinMs` (default 7 days). Sums the log's
+ * stroop amounts and returns a display XLM number. Older scoops are excluded so
+ * the "this week" framing stays honest.
+ */
+export function scoopedXlmWithin(
+  withinMs: number = 7 * 24 * 60 * 60 * 1000,
+  log: ScoopLogEntry[] = loadScoopLog(),
+  now: number = Date.now(),
+): number {
+  const cutoff = now - withinMs;
+  let stroops = 0n;
+  for (const e of log) {
+    if (e.at >= cutoff) {
+      try {
+        stroops += BigInt(e.amountStroops);
+      } catch {
+        /* skip a corrupt entry */
+      }
+    }
+  }
+  // stroops → XLM (7 decimals). Kept local to avoid a circular import of
+  // src/lib/allowance's stroopsToXlm from this React-free module.
+  return Number(stroops) / 10_000_000;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Savings goal — kid-set, per device. Empty until the kid names one; the /me
+//  goal card and the stash mini-card's goal line both read this single store
+//  (audit issue 6: no more hardcoded Lego). Progress = real balance / target.
+//    Shape: { name, targetXlm }
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const GOAL_STORAGE_KEY = "maestro.goal.v1";
+export const GOAL_EVENT = "maestro:goal-changed";
+/** The goal name is a short label; keep it a chip, not a paragraph. */
+export const GOAL_NAME_MAX = 24;
+
+export interface SavingsGoal {
+  /** What the kid is saving for ("A new skateboard"). */
+  name: string;
+  /** Target in XLM. */
+  targetXlm: number;
+}
+
+export function loadGoal(): SavingsGoal | null {
+  try {
+    const raw = localStorage.getItem(GOAL_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as SavingsGoal;
+    if (
+      !parsed ||
+      typeof parsed !== "object" ||
+      typeof parsed.name !== "string" ||
+      typeof parsed.targetXlm !== "number"
+    )
+      return null;
+    const name = parsed.name.trim();
+    if (!name || !(parsed.targetXlm > 0)) return null;
+    return { name: name.slice(0, GOAL_NAME_MAX), targetXlm: parsed.targetXlm };
+  } catch {
+    return null;
+  }
+}
+
+/** Save (or, with null, clear) the goal. Emits a same-tab change event. */
+export function saveGoal(goal: SavingsGoal | null): void {
+  try {
+    if (goal === null) {
+      localStorage.removeItem(GOAL_STORAGE_KEY);
+    } else {
+      const name = goal.name.trim().slice(0, GOAL_NAME_MAX);
+      if (!name || !(goal.targetXlm > 0)) return;
+      localStorage.setItem(GOAL_STORAGE_KEY, JSON.stringify({ name, targetXlm: goal.targetXlm }));
+    }
+    if (typeof window !== "undefined") window.dispatchEvent(new Event(GOAL_EVENT));
+  } catch {
+    /* ignore */
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 //  Freshness — derived at render, no scheduler. A stored pending/done entry
 //  only "counts" for the current period of the chore's repeat cadence; once the
 //  period rolls over, the entry is stale and the chore reads as todo again.

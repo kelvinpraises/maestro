@@ -15,7 +15,6 @@
 
 import { createFileRoute, useNavigate, redirect } from "@tanstack/react-router";
 import {
-  BellIcon,
   SparkleIcon,
   ListChecksIcon,
   PiggyBankIcon,
@@ -36,20 +35,19 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { EarningsHero } from "@/components/organisms/earnings-hero";
 import { QuestCard, type QuestTint } from "@/components/molecules/quest-card";
+import { ChoreCard } from "@/components/molecules/chore-card";
 import { IconTile, EmojiTile } from "@/components/atoms/icon-tile";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/atoms/avatar";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/molecules/dialog";
 import { Button } from "@/components/atoms/button";
 import { useStellarWallet } from "@/providers/stellar-wallet-provider";
 import { useMyRewards, useFundReward } from "@/hooks/use-rewards";
-import { useFamily, useChoreStates } from "@/hooks/use-family";
+import {
+  useFamily,
+  useChoreStates,
+  useKidStreak,
+  useSavingsGoal,
+  useScoopedThisWeek,
+} from "@/hooks/use-family";
 import {
   loadFamily,
   buildClaimLink,
@@ -116,7 +114,8 @@ function HomeHeader({
   title: React.ReactNode;
   subtitle: string;
 }) {
-  const navigate = useNavigate();
+  // No bell: a bell promises notifications none exist; it returns later as the
+  // board inbox (audit issue 8). Until then the header is just the greeting.
   return (
     <header className="flex items-center justify-between">
       <div className="flex min-w-0 items-center gap-3">
@@ -140,14 +139,6 @@ function HomeHeader({
           </p>
         </div>
       </div>
-      <button
-        type="button"
-        onClick={() => navigate({ to: "/me" })}
-        aria-label="Notifications"
-        className="press-pop flex size-11 shrink-0 items-center justify-center rounded-2xl border-2 border-m-ink bg-card text-foreground shadow-[var(--m-pop-sm)]"
-      >
-        <BellIcon className="size-5" weight="bold" />
-      </button>
     </header>
   );
 }
@@ -169,14 +160,26 @@ function KidHome({ chores }: { chores: ChoreRow[] }) {
 
   // A kid sees chores assigned to them or unassigned ("anyone"); chores owned by
   // OTHER kids don't render here. Each row's status is this kid's own effective
-  // (freshness-derived) state.
-  const myChores = useMemo(
-    () =>
-      chores
-        .filter((c) => !c.assignee || c.assignee === myName)
-        .map((c) => ({ chore: c, status: stateFor(c, myName) })),
-    [chores, myName, stateFor],
-  );
+  // (freshness-derived) state. We split into three groups (audit survivor):
+  //   1. MINE      — assigned to me, not yet done this period.
+  //   2. ANYONE    — shared chores, not yet done this period.
+  //   3. CRUSHED   — anything I completed this period, rendered proud.
+  const { mine, anyone, crushed } = useMemo(() => {
+    const mine: { chore: ChoreRow; status: ChoreState }[] = [];
+    const anyone: { chore: ChoreRow; status: ChoreState }[] = [];
+    const crushed: { chore: ChoreRow; status: ChoreState }[] = [];
+    for (const c of chores) {
+      if (c.assignee && c.assignee !== myName) continue; // someone else's
+      const status = stateFor(c, myName);
+      if (status === "done") crushed.push({ chore: c, status });
+      else if (c.assignee === myName) mine.push({ chore: c, status });
+      else anyone.push({ chore: c, status });
+    }
+    return { mine, anyone, crushed };
+  }, [chores, myName, stateFor]);
+
+  const totalMine = mine.length + anyone.length + crushed.length;
+  const choresLeft = mine.length + anyone.length;
 
   // Real XLM balance drives the stash card. Unfunded is a valid 0, not an error.
   const stashBalance = useMemo(
@@ -184,33 +187,45 @@ function KidHome({ chores }: { chores: ChoreRow[] }) {
     [xlmBalance],
   );
 
-  // "Stash" savings-goal target (sample copy).
-  const stashGoalTarget = 25;
+  // The kid-set savings goal (name + target). Null until the kid names one on
+  // /me — the stash mini-card's goal line reads the same store.
+  const { goal } = useSavingsGoal();
 
   // Private rewards on this device (notes + on-chain claimed status).
   const rewards = useMyRewards();
   const rewardViews = rewards.data ?? [];
   const claimableCount = rewardViews.filter((r) => !r.claimed).length;
 
-  // Earned this week (XLM): this device's rewards claimed on-chain AND funded in
-  // the last 7 days. A zero hero is a sad hero — first-day Zuri shouldn't open to
-  // 0.00, so we skip the hero entirely below when this is 0.
+  // Real streak: consecutive days with ≥1 chore done, from the done log.
+  const streakDays = useKidStreak(myName);
+
+  // Earned this week (XLM) = rewards this device claimed on-chain in the last 7
+  // days PLUS allowance scooped in the last 7 days (audit issue 5 — the number
+  // must match what the kid watched land). A zero hero is a sad hero, so we skip
+  // the hero entirely below when this is 0.
+  const scoopedThisWeek = useScoopedThisWeek();
   const earnedThisWeek = useMemo(() => {
     const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    return rewardViews
+    const fromRewards = rewardViews
       .filter((r) => r.claimed && r.createdAt >= weekAgo)
       .reduce((sum, r) => sum + r.amountXlm, 0);
-  }, [rewardViews]);
+    return fromRewards + scoopedThisWeek;
+  }, [rewardViews, scoopedThisWeek]);
 
-  const choresLeft = myChores.filter((c) => c.status !== "done").length;
-
-  // The confirm-before-pending sheet: tapping a todo chore opens "I did it! ✋".
-  const [confirmChore, setConfirmChore] = useState<ChoreRow | null>(null);
+  // The chore card: tapping a chore opens it (todo → "I did it! ✋"; pending →
+  // the waiting state). One component for both.
+  const [cardChore, setCardChore] = useState<ChoreRow | null>(null);
+  const cardStatus =
+    cardChore ? (stateFor(cardChore, myName) as "todo" | "pending" | "done") : "todo";
 
   // Who the kid is waiting on. We don't know the parent's name, so use the
   // warmest generic ("the grown-ups") — the eyes carry the "someone's checking"
   // energy from Story B.
   const waitingFor = "the grown-ups 👀";
+
+  const allDone = totalMine > 0 && choresLeft === 0;
+
+  const openChore = (c: ChoreRow) => setCardChore(c);
 
   return (
     <div className="stagger-rise space-y-5">
@@ -224,15 +239,17 @@ function KidHome({ chores }: { chores: ChoreRow[] }) {
 
       {/* Earnings hero — only when there's money to celebrate this week. */}
       {earnedThisWeek > 0 && (
-        <EarningsHero amount={earnedThisWeek} streakDays={6} />
+        <EarningsHero amount={earnedThisWeek} streakDays={streakDays} />
       )}
 
       {/* My Stash — balance + the live allowance drip that pours into it. The
-          faucet drips into the piggy bank you're looking at (DESIGN-STORY §4). */}
+          faucet drips into the piggy bank you're looking at (DESIGN-STORY §4).
+          Tapping it opens /me, where the stash's detail + goal live. */}
       <KidStashCard
         stashBalance={stashBalance}
-        stashGoalTarget={stashGoalTarget}
-        onOpen={() => navigate({ to: "/family" })}
+        goalName={goal?.name}
+        goalTarget={goal?.targetXlm}
+        onOpen={() => navigate({ to: "/me" })}
       />
 
       {/* Rewards mini-card → private-claim flow. */}
@@ -258,21 +275,21 @@ function KidHome({ chores }: { chores: ChoreRow[] }) {
         <CaretRightIcon className="size-5 text-muted-foreground" weight="bold" />
       </button>
 
-      {/* Today's Chores — real chores from the family store. */}
-      <section className="space-y-3">
+      {/* My chores today — mine first, then anyone-chores, then Crushed today. */}
+      <section className="space-y-4">
         <div className="flex items-center justify-between px-1">
           <h2 className="flex items-center gap-1.5 font-display text-lg font-extrabold">
             <SparkleIcon className="size-4 text-m-gold" weight="fill" />
-            Today&apos;s Chores
+            My chores today
           </h2>
-          {myChores.length > 0 && (
+          {choresLeft > 0 && (
             <span className="rounded-full border-2 border-m-ink bg-primary/20 px-2.5 py-0.5 text-xs font-extrabold text-m-green-ink">
-              {choresLeft} Left
+              {choresLeft} left
             </span>
           )}
         </div>
 
-        {myChores.length === 0 ? (
+        {totalMine === 0 ? (
           <div className="card-pop bg-card/70 p-6 text-center">
             <IconTile
               icon={BroomIcon}
@@ -288,85 +305,122 @@ function KidHome({ chores }: { chores: ChoreRow[] }) {
             </p>
           </div>
         ) : (
-          <div className="space-y-2.5">
-            {myChores.map(({ chore: c, status }) => (
-              <ChoreRowKid
-                key={c.id}
-                chore={c}
-                status={status}
-                waitingFor={waitingFor}
-                onTapTodo={() => setConfirmChore(c)}
-              />
-            ))}
-          </div>
+          <>
+            {allDone && (
+              <div className="card-pop card-pop-mint p-5 text-center">
+                <p className="font-display text-lg font-extrabold text-m-green-ink">
+                  You crushed everything today! 💪
+                </p>
+                <p className="mt-0.5 text-[13px] font-bold text-m-green-ink/70">
+                  Come back tomorrow for more.
+                </p>
+              </div>
+            )}
+
+            {/* 1 — Mine (assigned to me). */}
+            {mine.length > 0 && (
+              <ChoreGroup label="Just for you">
+                {mine.map(({ chore: c, status }) => (
+                  <ChoreRowKid
+                    key={c.id}
+                    chore={c}
+                    status={status}
+                    waitingFor={waitingFor}
+                    onOpen={() => openChore(c)}
+                  />
+                ))}
+              </ChoreGroup>
+            )}
+
+            {/* 2 — Anyone-chores (shared, first-claim). */}
+            {anyone.length > 0 && (
+              <ChoreGroup label="Anyone can grab these">
+                {anyone.map(({ chore: c, status }) => (
+                  <ChoreRowKid
+                    key={c.id}
+                    chore={c}
+                    status={status}
+                    waitingFor={waitingFor}
+                    onOpen={() => openChore(c)}
+                  />
+                ))}
+              </ChoreGroup>
+            )}
+
+            {/* 3 — Crushed today (done), rendered proud, not crossed-out. */}
+            {crushed.length > 0 && (
+              <ChoreGroup label="Crushed today 💪">
+                {crushed.map(({ chore: c, status }) => (
+                  <ChoreRowKid
+                    key={c.id}
+                    chore={c}
+                    status={status}
+                    waitingFor={waitingFor}
+                    onOpen={() => openChore(c)}
+                  />
+                ))}
+              </ChoreGroup>
+            )}
+          </>
         )}
       </section>
 
-      {/* "I did it!" confirm — tapping a todo chore asks before waving it in. */}
-      <Dialog
-        open={!!confirmChore}
-        onOpenChange={(o) => !o && setConfirmChore(null)}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <div className="mx-auto mb-1">
-              {confirmChore &&
-                (confirmChore.emoji ? (
-                  <EmojiTile emoji={confirmChore.emoji} tint="green" size="lg" bordered />
-                ) : (
-                  <IconTile icon={ListChecksIcon} tint="green" size="lg" bordered />
-                ))}
-            </div>
-            <DialogTitle className="text-center">
-              Did you finish&nbsp;{confirmChore?.name}?
-            </DialogTitle>
-            <DialogDescription className="text-center">
-              We&apos;ll let {waitingFor.replace(" 👀", "")} know so they can send
-              your {confirmChore ? confirmChore.rewardXlm.toFixed(2) : ""} XLM.
-            </DialogDescription>
-          </DialogHeader>
-          {confirmChore?.note && (
-            <div className="rounded-2xl border-2 border-m-ink/15 bg-muted/40 px-3.5 py-2.5 text-center">
-              <p className="text-[13px] font-bold text-foreground text-pretty">
-                {confirmChore.note}
-              </p>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmChore(null)}>
-              Not yet
-            </Button>
-            <Button
-              onClick={() => {
-                if (confirmChore)
-                  setChoreState(confirmChore.id, myName, "pending");
-                setConfirmChore(null);
-              }}
-            >
-              I did it! ✋
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* The chore card — the doing moment's own room. Todo shows the one huge
+          primary; pending shows the waiting state (same card). */}
+      <ChoreCard
+        chore={cardChore}
+        status={cardStatus === "done" ? "todo" : cardStatus}
+        waitingFor={waitingFor}
+        open={!!cardChore && cardStatus !== "done"}
+        onOpenChange={(o) => !o && setCardChore(null)}
+        onConfirm={() => {
+          if (cardChore) setChoreState(cardChore.id, myName, "pending");
+          setCardChore(null);
+        }}
+      />
     </div>
   );
 }
 
-/** One kid chore row: todo taps to confirm; pending shows a waiting badge. */
+/** A titled group inside "My chores today" with an in-voice ALL-CAPS microlabel. */
+function ChoreGroup({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-2.5">
+      <p className="text-microlabel px-1 text-muted-foreground">{label}</p>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * One kid chore row. todo/pending tap open the chore card; done renders proud
+ * (mint + check) via QuestCard, and also opens the card (read-only-ish) on tap.
+ * Pending keeps its own row with the waiting badge, inside its group.
+ */
 function ChoreRowKid({
   chore,
   status,
   waitingFor,
-  onTapTodo,
+  onOpen,
 }: {
   chore: ChoreRow;
   status: ChoreState;
   waitingFor: string;
-  onTapTodo: () => void;
+  onOpen: () => void;
 }) {
   if (status === "pending") {
     return (
-      <div className="animate-pop-in card-pop card-pop-sky flex w-full items-center gap-3.5 p-3">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="animate-pop-in press-pop card-pop card-pop-sky flex w-full items-center gap-3.5 p-3 text-left"
+      >
         {chore.emoji ? (
           <EmojiTile emoji={chore.emoji} tint="blue" size="lg" bordered />
         ) : (
@@ -385,12 +439,12 @@ function ChoreRowKid({
             Waiting for {waitingFor}
           </span>
         </div>
-      </div>
+      </button>
     );
   }
 
-  // todo / done → the shared chore-row card. Done renders celebrated (mint +
-  // check) by QuestCard; todo taps open the "I did it!" confirm.
+  // todo → the shared chore-row card, tap opens the chore card. done → celebrated
+  // (mint + check) by QuestCard; still tappable to reopen its card.
   return (
     <QuestCard
       title={chore.name}
@@ -398,9 +452,9 @@ function ChoreRowKid({
       icon={ListChecksIcon}
       emoji={chore.emoji}
       note={chore.note}
-      tint={chore.tint}
+      tint={status === "done" ? "green" : chore.tint}
       status={status}
-      onClick={status === "todo" ? onTapTodo : undefined}
+      onClick={onOpen}
     />
   );
 }
@@ -426,11 +480,14 @@ const SCOOP_COPY: Record<CollectStep, string> = {
  */
 function KidStashCard({
   stashBalance,
-  stashGoalTarget,
+  goalName,
+  goalTarget,
   onOpen,
 }: {
   stashBalance: number | null;
-  stashGoalTarget: number;
+  /** The kid's goal (from the shared store), or undefined when none is set. */
+  goalName?: string;
+  goalTarget?: number;
   onOpen: () => void;
 }) {
   const { publicKey } = useStellarWallet();
@@ -497,14 +554,19 @@ function KidStashCard({
             </span>
           </p>
         </div>
-        <span className="mr-1 flex min-w-0 flex-1 flex-col items-end">
-          <span className="max-w-full truncate text-[11px] font-bold text-muted-foreground">
-            Goal: New Lego Set
+        {/* Goal line reads the shared store; hidden entirely when no goal set. */}
+        {goalName && goalTarget ? (
+          <span className="mr-1 flex min-w-0 flex-1 flex-col items-end">
+            <span className="max-w-full truncate text-[11px] font-bold text-muted-foreground">
+              Goal: {goalName}
+            </span>
+            <span className="max-w-full truncate text-[11px] font-extrabold tabular-nums text-m-green-ink">
+              {goalTarget.toFixed(0)} XLM
+            </span>
           </span>
-          <span className="max-w-full truncate text-[11px] font-extrabold tabular-nums text-m-green-ink">
-            {stashGoalTarget.toFixed(0)} XLM
-          </span>
-        </span>
+        ) : (
+          <span className="flex-1" />
+        )}
         <CaretRightIcon
           className="size-5 shrink-0 text-muted-foreground"
           weight="bold"
