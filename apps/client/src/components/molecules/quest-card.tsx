@@ -96,7 +96,7 @@ export function QuestCard({
             <CheckIcon className="size-5" weight="bold" />
           </span>
         ) : (
-          <span className="flex size-9 items-center justify-center rounded-full border-2 border-m-ink bg-white text-foreground shadow-[var(--m-pop-sm)] transition-transform duration-200 group-hover:translate-x-0.5">
+          <span className="flex size-9 items-center justify-center rounded-full border-2 border-m-ink bg-white text-foreground shadow-[var(--m-pop-sm)] transition-transform duration-200 [@media(hover:hover)]:group-hover:translate-x-0.5">
             <CaretRightIcon className="size-5" weight="bold" />
           </span>
         )}

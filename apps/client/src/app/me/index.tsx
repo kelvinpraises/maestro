@@ -174,8 +174,19 @@ function GrownupsPanel({
         />
       </button>
 
-      {open && (
-        <div className="space-y-3 border-t-2 border-m-ink/10 px-4 pb-4 pt-3.5">
+      {/* Collapsible body: a grid-template-rows 0fr→1fr transition gives a real
+          200ms open/close (the caret above rotates in step). The inner wrapper
+          must be overflow-hidden and min-h-0 so it clips while collapsing.
+          Under reduced-motion the grid snaps (no height animation). */}
+      <div
+        className="grid transition-[grid-template-rows] duration-200 ease-[var(--ease-out-pop)] motion-reduce:transition-none"
+        style={{ gridTemplateRows: open ? "1fr" : "0fr" }}
+      >
+        <div className="overflow-hidden min-h-0">
+          <div
+            aria-hidden={!open}
+            className="space-y-3 border-t-2 border-m-ink/10 px-4 pb-4 pt-3.5"
+          >
           {/* Wallet address + copy */}
           {publicKey && (
             <button
@@ -243,8 +254,9 @@ function GrownupsPanel({
             <LockIcon className="size-3.5 shrink-0" weight="fill" />
             Rewards are private — only your family knows.
           </p>
+          </div>
         </div>
-      )}
+      </div>
     </section>
   );
 }

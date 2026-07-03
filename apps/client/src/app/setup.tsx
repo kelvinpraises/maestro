@@ -173,7 +173,7 @@ function SetupPage() {
               <span
                 key={i}
                 className={cn(
-                  "h-2.5 rounded-full border-2 border-m-ink transition-all duration-200",
+                  "h-2.5 rounded-full border-2 border-m-ink transition-[width,background-color] duration-200 ease-[var(--ease-out-pop)]",
                   i === step
                     ? "w-7 bg-primary"
                     : i < step

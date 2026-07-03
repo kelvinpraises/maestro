@@ -73,6 +73,13 @@
   --font-mono: "Nunito", ui-monospace, SFMono-Regular, Menlo, monospace;
   --font-display: var(--font-baloo);
 
+  /* ---- Motion curves (DESIGN-STORY §3.5: playful-but-quick) ----
+     Two custom curves the whole app shares. `--ease-out-pop` is a strong
+     ease-out with a hair of settle for entrances (never overshoots into
+     scale(0)); `--ease-in-out-move` is a firm in-out for position moves. */
+  --ease-out-pop: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out-move: cubic-bezier(0.77, 0, 0.175, 1);
+
   --radius: 1.25rem;                           /* fat rounded corners */
 
   /* Soft, colorful floating shadows */
@@ -259,8 +266,8 @@
   --font-bebasNeue: var(--font-bebasNeue);
   --font-instrumentSerif: var(--font-instrumentSerif);
   --font-anton: var(--font-anton);
-  --animate-pop-in: pop-in 0.42s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-  --animate-rise-in: rise-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-pop-in: pop-in 0.24s var(--ease-out-pop) both;
+  --animate-rise-in: rise-in 0.24s var(--ease-out-pop) both;
   --animate-wiggle: wiggle 0.6s ease-in-out;
   --animate-coin-bounce: coin-bounce 1.4s ease-in-out infinite;
   --animate-float-soft: float-soft 4s ease-in-out infinite;
@@ -412,7 +419,7 @@
     to { background-position: -200% 0; }
   }
   @keyframes pop-in {
-    0% { opacity: 0; transform: scale(0.9) translateY(8px); }
+    0% { opacity: 0; transform: scale(0.96) translateY(8px); }
     100% { opacity: 1; transform: scale(1) translateY(0); }
   }
   @keyframes rise-in {
@@ -588,7 +595,7 @@
   }
   /* Staggered enter helper for lists of cards */
   .stagger-rise > * {
-    animation: rise-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation: rise-in 0.24s var(--ease-out-pop) both;
   }
   .stagger-rise > *:nth-child(1) { animation-delay: 0.04s; }
   .stagger-rise > *:nth-child(2) { animation-delay: 0.1s; }
@@ -609,6 +616,24 @@
   }
   @media (prefers-reduced-motion: reduce) {
     .drip-dot { animation: none; opacity: 1; }
+  }
+
+  /* Reduced-motion: still every movement animation the app applies via utility
+     classes. Entrances snap to their resting state (opacity + transform:none)
+     instead of sliding/scaling; idle loops (float, coin-bounce, wiggle) stop.
+     Color/opacity-only transitions are left alone — they don't cause motion.
+     (drip-dot, stagger-rise, press-pop, count-up, confetti are gated at their
+     own definitions / in JS.) */
+  @media (prefers-reduced-motion: reduce) {
+    .animate-pop-in,
+    .animate-rise-in {
+      animation: none;
+    }
+    .animate-float-soft,
+    .animate-coin-bounce,
+    .animate-wiggle {
+      animation: none;
+    }
   }
 }
 

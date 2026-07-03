@@ -69,7 +69,7 @@ export function BottomNav() {
                 weight={active ? "fill" : "bold"}
                 className={cn(
                   "transition-transform duration-200",
-                  active ? "scale-105" : "group-hover:scale-105",
+                  active ? "scale-105" : "[@media(hover:hover)]:group-hover:scale-105",
                 )}
               />
               <span className="text-[11px] font-extrabold tracking-tight">{label}</span>
