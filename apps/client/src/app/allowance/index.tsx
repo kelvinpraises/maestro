@@ -64,6 +64,13 @@ const PERIODS: { id: AllowancePeriod; label: string }[] = [
   { id: "week", label: "per week" },
 ];
 
+// Below this a waiting amount is dust: not worth a gas-costing scoop. We hide the
+// Scoop button below it (only scoop when there's really something to scoop), and
+// once a stream's funding is also drained to dust we mark it Done instead of
+// leaving it in the live section forever. 0.0001 XLM = 1000 stroops.
+const DUST_STROOPS = 1_000n;
+const DUST_XLM = 0.0001;
+
 /**
  * Which recipient mode the picker is in.
  *   • "kids"    — the DEFAULT: stream to one or more of the family's kids (each
@@ -251,6 +258,26 @@ function ParentAllowanceView() {
   // stash card — showing a 0/scoop here would be misleading.
   const showParentScoop = mode === "myself";
 
+  // Only show the Scoop button when there is really something to scoop (above
+  // dust) — no perpetual disabled button. And once the pot is drained to dust,
+  // the allowance is DONE: mark it so and drop it out of the live section.
+  const parentScoopable =
+    waiting !== null && waiting >= DUST_STROOPS && hasReceivable && !!publicKey;
+  const myselfDone =
+    showParentScoop &&
+    fundedRemaining < DUST_STROOPS &&
+    (waiting ?? 0n) < DUST_STROOPS;
+  // Distinguish "drained → done" from "never set one up": remember (this session)
+  // whether the pot was ever funded, so a finished drip reads as Done rather than
+  // "no allowance yet".
+  const everFundedRef = useRef(false);
+  useEffect(() => {
+    if (fundedRemaining >= DUST_STROOPS || create.isSuccess)
+      everFundedRef.current = true;
+  }, [fundedRemaining, create.isSuccess]);
+  const kidsPotEmpty = !showParentScoop && fundedRemaining < DUST_STROOPS;
+  const kidsPotDone = kidsPotEmpty && everFundedRef.current;
+
   return (
     <div className="stagger-rise space-y-5">
       <header>
@@ -301,24 +328,35 @@ function ParentAllowanceView() {
             </div>
           </div>
 
-          <button
-            type="button"
-            disabled={collect.isPending || !hasReceivable || !publicKey}
-            onClick={() => publicKey && collect.mutate({ to: publicKey })}
-            className="press-pop flex h-14 w-full items-center justify-center gap-2 rounded-full border-2 border-m-ink bg-primary font-display text-lg font-extrabold text-primary-foreground shadow-[var(--m-pop)] hover:brightness-[1.03] disabled:opacity-50"
-          >
-            {collect.isPending ? (
-              <>
-                <SpinnerGapIcon className="size-5 animate-spin" weight="bold" />
-                Scooping…
-              </>
-            ) : (
-              <>
-                <DownloadSimpleIcon className="size-5" weight="bold" />
-                Scoop it up
-              </>
-            )}
-          </button>
+          {/* Scoop only when there's really something to scoop (above dust). */}
+          {parentScoopable || collect.isPending ? (
+            <button
+              type="button"
+              disabled={collect.isPending || !parentScoopable}
+              onClick={() => publicKey && collect.mutate({ to: publicKey })}
+              className="press-pop flex h-14 w-full items-center justify-center gap-2 rounded-full border-2 border-m-ink bg-primary font-display text-lg font-extrabold text-primary-foreground shadow-[var(--m-pop)] hover:brightness-[1.03] disabled:opacity-50"
+            >
+              {collect.isPending ? (
+                <>
+                  <SpinnerGapIcon className="size-5 animate-spin" weight="bold" />
+                  Scooping…
+                </>
+              ) : (
+                <>
+                  <DownloadSimpleIcon className="size-5" weight="bold" />
+                  Scoop it up
+                </>
+              )}
+            </button>
+          ) : myselfDone ? (
+            <p className="text-center text-[13px] font-bold text-muted-foreground text-pretty">
+              This allowance has finished. Start another below to keep it flowing.
+            </p>
+          ) : (
+            <p className="text-center text-[12px] font-bold text-muted-foreground text-pretty">
+              Nothing to scoop this second. It builds up as it drips.
+            </p>
+          )}
           {collect.isSuccess && (
             <p className="text-center text-[13px] font-extrabold text-m-green-ink">
               Collected {stroopsToXlm(collect.data.collected).toFixed(4)} XLM! 🪙
@@ -331,26 +369,38 @@ function ParentAllowanceView() {
           )}
         </>
       ) : (
-        // Kid recipients: the parent only funds + sends. Show the honest
-        // sender-side funded balance and a plain note that scooping is the kid's
-        // move — no misleading 0/scoop on the parent's screen.
-        <div className="card-pop card-pop-butter p-4">
-          <span className="flex items-center gap-1.5 text-microlabel text-muted-foreground">
-            <PiggyBankIcon className="size-3.5" weight="duotone" />
-            Still funded
-          </span>
-          <p className="mt-1 text-money text-2xl">
-            {state.isLoading ? "…" : `${stroopsToXlm(fundedRemaining).toFixed(4)}`}
-            <span className="ml-1 text-[11px] font-bold text-muted-foreground">
-              XLM
+        // Kid recipients: the parent only funds + sends. Scooping is the kid's
+        // move, so no scoop here. Once the pot drains to dust it's Done and drops
+        // out of the live "still funded" framing (no misleading 0.0000 flowing).
+        kidsPotEmpty ? (
+          <div className="card-pop bg-muted/50 p-4">
+            <span className="flex items-center gap-1.5 text-microlabel text-muted-foreground">
+              <CheckCircleIcon className="size-3.5" weight="duotone" />
+              {kidsPotDone ? "Allowance finished" : "No allowance yet"}
             </span>
-          </p>
-          <p className="mt-1.5 text-[12px] font-semibold text-muted-foreground text-pretty">
-            {fundedRemaining > 0n
-              ? `Flowing to ${recipientLabel}. They scoop it up from their own stash.`
-              : `Set up an allowance below and it starts flowing to ${recipientLabel}.`}
-          </p>
-        </div>
+            <p className="mt-1.5 text-[13px] font-bold text-muted-foreground text-pretty">
+              {kidsPotDone
+                ? `The drip to ${recipientLabel} has run out. Start another below to keep it flowing.`
+                : `Set up an allowance below and it starts flowing to ${recipientLabel}.`}
+            </p>
+          </div>
+        ) : (
+          <div className="card-pop card-pop-butter p-4">
+            <span className="flex items-center gap-1.5 text-microlabel text-muted-foreground">
+              <PiggyBankIcon className="size-3.5" weight="duotone" />
+              Still funded
+            </span>
+            <p className="mt-1 text-money text-2xl">
+              {state.isLoading ? "…" : `${stroopsToXlm(fundedRemaining).toFixed(4)}`}
+              <span className="ml-1 text-[11px] font-bold text-muted-foreground">
+                XLM
+              </span>
+            </p>
+            <p className="mt-1.5 text-[12px] font-semibold text-muted-foreground text-pretty">
+              Flowing to {recipientLabel}. They scoop it up from their own stash.
+            </p>
+          </div>
+        )
       )}
 
       {/* ── Set up a new allowance ────────────────────────────────────────── */}
@@ -721,7 +771,10 @@ function KidAllowanceView() {
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
 
   const waitingXlm = drip.waitingXlm;
-  const canScoop = drip.hasIncoming && waitingXlm > 0 && !collect.isPending && !!publicKey;
+  // Only scoop when there's really something above dust — no perpetual disabled
+  // button when the number reads 0.0000.
+  const scoopable = waitingXlm >= DUST_XLM;
+  const canScoop = scoopable && !collect.isPending && !!publicKey;
   const scooping =
     collect.isPending || step === "receive" || step === "split" || step === "collect";
 
@@ -780,6 +833,7 @@ function KidAllowanceView() {
       )}
 
       {hasAllowance ? (
+        scoopable || scooping || step === "done" || step === "error" ? (
         <>
           {/* Live drip: "Dripping in" + waiting total (ticks between polls). */}
           <div className="card-pop card-pop-mint p-4">
@@ -845,6 +899,24 @@ function KidAllowanceView() {
             </p>
           )}
         </>
+        ) : (
+          // Nothing to scoop right now: calm and honest, no dead scoop button.
+          <div className="card-pop bg-muted/40 p-4">
+            <span className="flex items-center gap-1.5 text-microlabel text-muted-foreground">
+              {drip.hasIncoming ? (
+                <DropIcon className="size-3.5" weight="duotone" />
+              ) : (
+                <CheckCircleIcon className="size-3.5" weight="duotone" />
+              )}
+              {drip.hasIncoming ? "Dripping in" : "All caught up"}
+            </span>
+            <p className="mt-1.5 text-[13px] font-bold text-muted-foreground text-pretty">
+              {drip.hasIncoming
+                ? "It's flowing in on its own. Nothing to scoop just this second."
+                : "You've scooped it all. It drips in again when your grown-up adds more."}
+            </p>
+          </div>
+        )
       ) : (
         // No allowance yet: a warm empty state (never a sad zero / dead scoop).
         <div className="card-pop card-pop-butter flex flex-col items-center gap-2 p-6 text-center">
