@@ -68,7 +68,7 @@ function MePage() {
           icon={ListChecksIcon}
           tint="mint"
           label="Set up chores & rewards"
-          onClick={() => navigate({ to: "/streams" })}
+          onClick={() => navigate({ to: "/circles" })}
         />
         <LinkRow
           icon={UsersIcon}

@@ -141,11 +141,22 @@ export interface AllowanceState {
   collectable: bigint;
   /** Whole elapsed cycles not yet received. */
   receivableCycles: bigint;
+  /**
+   * Streamed-out-but-not-yet-received amount (stroops): money that has flowed
+   * past the last settlement and would be credited on the next `receive`, but
+   * hasn't been pulled into `splittable`/`collectable` yet. Derived from the
+   * settled balance (`balance` at `update_time`) minus the live drained balance
+   * (`balance_at(now)`) — the contract exposes no direct read for this, and it
+   * is the honest source for the stash card's "waiting" drip (splittable +
+   * collectable stay 0 until a scoop runs `receive`).
+   */
+  receivableStreamed: bigint;
 }
 
 /**
  * Poll the allowance state for a wallet: how much is still funded as a sender,
- * and how much is waiting to be collected as a recipient (splittable +
+ * and how much is waiting to be collected as a recipient (the streamed-out
+ * amount that a `receive` would credit, plus already-received splittable +
  * collectable, plus the count of receivable cycles). All simulate-only reads.
  */
 export function useAllowanceState(address: string | undefined) {
@@ -156,19 +167,39 @@ export function useAllowanceState(address: string | undefined) {
     refetchInterval: 5_000,
     queryFn: async () => {
       const account = address!;
-      const [stateTx, splittableTx, collectableTx, cyclesTx] = await Promise.all([
-        dripsRead.streams_state({ account, token: TOKEN }),
-        dripsRead.splittable({ account, token: TOKEN }),
-        dripsRead.collectable({ account, token: TOKEN }),
-        dripsRead.receivable_streams_cycles({ account, token: TOKEN }),
-      ]);
-      const [, , maxEnd, balance] = stateTx.result;
+      const nowSecs = BigInt(Math.floor(Date.now() / 1000));
+      const [stateTx, splittableTx, collectableTx, cyclesTx, balanceNowTx] =
+        await Promise.all([
+          dripsRead.streams_state({ account, token: TOKEN }),
+          dripsRead.splittable({ account, token: TOKEN }),
+          dripsRead.collectable({ account, token: TOKEN }),
+          dripsRead.receivable_streams_cycles({ account, token: TOKEN }),
+          // Live drained balance at "now". `balance_at` panics if the timestamp
+          // predates the last update; clamp defensively to update_time below by
+          // never asking for a time earlier than the settled snapshot.
+          dripsRead
+            .balance_at({ account, token: TOKEN, timestamp: nowSecs })
+            .then((tx) => tx.result)
+            .catch(() => null),
+        ]);
+      const [, updateTime, maxEnd, balance] = stateTx.result;
+
+      // Streamed-but-unreceived = settled balance − live balance. Clamp to
+      // [0, balance] so a stale/racey read can never claim more waiting than the
+      // funded balance could pay (Story D: money states never lie).
+      let receivableStreamed = 0n;
+      if (balanceNowTx !== null && nowSecs >= updateTime) {
+        const drained = balance - balanceNowTx;
+        receivableStreamed = drained < 0n ? 0n : drained > balance ? balance : drained;
+      }
+
       return {
         fundedRemaining: balance,
         maxEnd,
         splittable: splittableTx.result,
         collectable: collectableTx.result,
         receivableCycles: cyclesTx.result,
+        receivableStreamed,
       };
     },
   });

@@ -44,10 +44,15 @@ function AllowancePage() {
 
   const waiting = useMemo(() => {
     if (!state.data) return null;
-    // Everything the kid can still pull: whole cycles not yet received are
-    // approximated by splittable + collectable that's already surfaced. We show
-    // splittable + collectable (already-received-but-uncollected).
-    return state.data.splittable + state.data.collectable;
+    // Everything the kid can still pull right now: already-received-but-
+    // uncollected (splittable + collectable) plus the streamed-out amount a
+    // fresh receive would credit (receivableStreamed). The last term is what
+    // moves before any scoop — without it this reads a flat 0 while streaming.
+    return (
+      state.data.splittable +
+      state.data.collectable +
+      state.data.receivableStreamed
+    );
   }, [state.data]);
 
   const fundedRemaining = state.data?.fundedRemaining ?? 0n;
@@ -62,8 +67,8 @@ function AllowancePage() {
       <header>
         <h1 className="font-display text-3xl font-extrabold tracking-tight">Allowance</h1>
         <p className="mt-1 text-[15px] font-bold text-muted-foreground text-pretty">
-          Set up a steady drip of XLM. It flows every few seconds — collect it
-          whenever you like.
+          A steady drip into your kid&apos;s stash — it flows every few seconds.
+          Set the pace, fund it, and it pours in on its own.
         </p>
       </header>
 
@@ -101,12 +106,12 @@ function AllowancePage() {
         {collect.isPending ? (
           <>
             <SpinnerGapIcon className="size-5 animate-spin" weight="bold" />
-            Collecting…
+            Scooping…
           </>
         ) : (
           <>
             <DownloadSimpleIcon className="size-5" weight="bold" />
-            Collect my allowance
+            Scoop it up
           </>
         )}
       </button>

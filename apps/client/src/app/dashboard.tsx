@@ -27,8 +27,10 @@ import {
   HandHeartIcon,
   CheckIcon,
   UserPlusIcon,
+  DropIcon,
+  SpinnerGapIcon,
 } from "@phosphor-icons/react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { EarningsHero } from "@/components/organisms/earnings-hero";
 import { QuestCard, type QuestTint } from "@/components/molecules/quest-card";
 import { IconTile, EmojiTile } from "@/components/atoms/icon-tile";
@@ -47,6 +49,9 @@ import { useMyRewards } from "@/hooks/use-rewards";
 import { useFamily, useChoreStates } from "@/hooks/use-family";
 import { loadFamily, type Chore, type ChoreState } from "@/lib/family";
 import { zwerc20 } from "@/contracts/stellar";
+import { useAllowanceDrip } from "@/hooks/use-allowance-drip";
+import { useCollectAllowance, type CollectStep } from "@/hooks/use-allowance";
+import { useCountUp } from "@/hooks/use-count-up";
 
 export const Route = createFileRoute("/dashboard")({
   // A device with no family hasn't walked through the front door yet — send it to
@@ -268,38 +273,13 @@ function KidHome({ chores }: { chores: ChoreRow[] }) {
         <EarningsHero amount={earnedThisWeek} streakDays={6} />
       )}
 
-      {/* My Stash mini-card → treasury activity / earnings history. Step 4
-          upgrades this with the live allowance drip. */}
-      <button
-        type="button"
-        onClick={() => navigate({ to: "/history" })}
-        className="animate-pop-in press-pop card-pop card-pop-butter flex w-full items-center gap-3 p-4 text-left"
-      >
-        <IconTile icon={PiggyBankIcon} tint="gold" bordered />
-        <div className="shrink-0">
-          <p className="text-microlabel whitespace-nowrap text-muted-foreground">
-            My Stash
-          </p>
-          <p className="text-money whitespace-nowrap text-xl">
-            {stashBalance === null ? "…" : stashBalance.toFixed(2)}
-            <span className="ml-1 text-[11px] font-bold text-muted-foreground">
-              XLM
-            </span>
-          </p>
-        </div>
-        <span className="mr-1 flex min-w-0 flex-1 flex-col items-end">
-          <span className="max-w-full truncate text-[11px] font-bold text-muted-foreground">
-            Goal: New Lego Set
-          </span>
-          <span className="max-w-full truncate text-[11px] font-extrabold tabular-nums text-m-green-ink">
-            {stashGoalTarget.toFixed(0)} XLM
-          </span>
-        </span>
-        <CaretRightIcon
-          className="size-5 shrink-0 text-muted-foreground"
-          weight="bold"
-        />
-      </button>
+      {/* My Stash — balance + the live allowance drip that pours into it. The
+          faucet drips into the piggy bank you're looking at (DESIGN-STORY §4). */}
+      <KidStashCard
+        stashBalance={stashBalance}
+        stashGoalTarget={stashGoalTarget}
+        onOpen={() => navigate({ to: "/history" })}
+      />
 
       {/* Rewards mini-card → private-claim flow. */}
       <button
@@ -453,6 +433,169 @@ function ChoreRowKid({
       status={chore.status}
       onClick={chore.status === "todo" ? onTapTodo : undefined}
     />
+  );
+}
+
+// ── Kid stash card: balance + live allowance drip + "Scoop it up" ────────────
+
+/** Playful staged copy for the receive → split → collect pipeline. */
+const SCOOP_COPY: Record<CollectStep, string> = {
+  idle: "Scoop it up",
+  receive: "Scooping…",
+  split: "Pouring…",
+  collect: "Pouring…",
+  done: "Yours!",
+  error: "Try again",
+};
+
+/**
+ * The butter stash card. When an allowance is dripping in, it grows a mint drip
+ * line ("+ dripping in · X waiting") whose number ticks live between polls, a
+ * pulsing droplet, and a "Scoop it up" button that runs the collect pipeline and
+ * counts the balance up on success. Zero-allowance kids see it exactly as before
+ * (no drip line, no scoop) — the whole card is a plain button to history.
+ */
+function KidStashCard({
+  stashBalance,
+  stashGoalTarget,
+  onOpen,
+}: {
+  stashBalance: number | null;
+  stashGoalTarget: number;
+  onOpen: () => void;
+}) {
+  const { publicKey } = useStellarWallet();
+  const drip = useAllowanceDrip(publicKey);
+  const collect = useCollectAllowance();
+
+  // Staged copy: the hook's mutation is one promise, so we time the stages
+  // (receive → split → collect) to feel like the pipeline underneath rather than
+  // reading intermediate steps the mutation doesn't expose.
+  const [step, setStep] = useState<CollectStep>("idle");
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  useEffect(() => () => timers.current.forEach(clearTimeout), []);
+
+  // Count the balance up on a successful scoop (old → new, ~800ms ease-out).
+  const displayBalance = useCountUp(stashBalance ?? 0);
+
+  const waitingXlm = drip.waitingXlm;
+  const canScoop = drip.hasIncoming && waitingXlm > 0 && !collect.isPending;
+
+  const runScoop = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!canScoop) return;
+    setStep("receive");
+    timers.current.forEach(clearTimeout);
+    timers.current = [
+      setTimeout(() => setStep("split"), 900),
+      setTimeout(() => setStep("collect"), 1800),
+    ];
+    collect.mutate(
+      { to: publicKey },
+      {
+        onSuccess: () => {
+          timers.current.forEach(clearTimeout);
+          setStep("done");
+          timers.current = [setTimeout(() => setStep("idle"), 1600)];
+        },
+        onError: () => {
+          timers.current.forEach(clearTimeout);
+          setStep("error");
+          timers.current = [setTimeout(() => setStep("idle"), 2200)];
+        },
+      },
+    );
+  };
+
+  const scooping = collect.isPending || step === "receive" || step === "split" || step === "collect";
+
+  return (
+    <div className="animate-pop-in card-pop card-pop-butter overflow-hidden">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="press-pop flex w-full items-center gap-3 p-4 text-left"
+      >
+        <IconTile icon={PiggyBankIcon} tint="gold" bordered />
+        <div className="shrink-0">
+          <p className="text-microlabel whitespace-nowrap text-muted-foreground">
+            My Stash
+          </p>
+          <p className="text-money whitespace-nowrap text-xl tabular-nums">
+            {stashBalance === null ? "…" : displayBalance.toFixed(2)}
+            <span className="ml-1 text-[11px] font-bold text-muted-foreground">
+              XLM
+            </span>
+          </p>
+        </div>
+        <span className="mr-1 flex min-w-0 flex-1 flex-col items-end">
+          <span className="max-w-full truncate text-[11px] font-bold text-muted-foreground">
+            Goal: New Lego Set
+          </span>
+          <span className="max-w-full truncate text-[11px] font-extrabold tabular-nums text-m-green-ink">
+            {stashGoalTarget.toFixed(0)} XLM
+          </span>
+        </span>
+        <CaretRightIcon
+          className="size-5 shrink-0 text-muted-foreground"
+          weight="bold"
+        />
+      </button>
+
+      {/* Drip line + Scoop — only when money is actually dripping in. */}
+      {drip.hasIncoming && (
+        <div className="border-t-2 border-m-ink/15 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <span
+              aria-hidden
+              className="drip-dot flex size-5 shrink-0 items-center justify-center rounded-full bg-m-mint text-m-green-ink"
+            >
+              <DropIcon className="size-3.5" weight="fill" />
+            </span>
+            <p className="min-w-0 flex-1 text-[13px] font-extrabold text-m-green-ink">
+              Dripping in
+              <span className="mx-1 text-m-green-ink/50">·</span>
+              <span className="tabular-nums">{waitingXlm.toFixed(4)}</span>
+              <span className="ml-1 text-[11px] font-bold text-m-green-ink/70">
+                XLM waiting
+              </span>
+            </p>
+          </div>
+
+          {waitingXlm > 0 && (
+            <button
+              type="button"
+              onClick={runScoop}
+              disabled={!canScoop}
+              className="press-pop mt-2.5 flex h-12 w-full items-center justify-center gap-2 rounded-full border-2 border-m-ink bg-primary font-display text-base font-extrabold text-primary-foreground shadow-[var(--m-pop-sm)] hover:brightness-[1.03] disabled:opacity-60"
+            >
+              {scooping ? (
+                <>
+                  <SpinnerGapIcon className="size-5 animate-spin" weight="bold" />
+                  {SCOOP_COPY[step === "idle" ? "receive" : step]}
+                </>
+              ) : step === "done" ? (
+                <>
+                  <SparkleIcon className="size-5" weight="fill" />
+                  {SCOOP_COPY.done}
+                </>
+              ) : (
+                <>
+                  <DropIcon className="size-5" weight="fill" />
+                  Scoop it up
+                </>
+              )}
+            </button>
+          )}
+
+          {collect.isError && step === "error" && (
+            <p className="mt-2 text-center text-[12px] font-bold text-m-pink text-pretty">
+              The bank line is busy — your money is safe, try again in a moment.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -658,6 +801,7 @@ function ParentHome({ chores }: { chores: ChoreRow[] }) {
 
 /** Family bank — the parent's wallet balance + a top-up affordance in-voice. */
 function FamilyBankCard() {
+  const navigate = useNavigate();
   const { xlmBalance, balanceLoaded, fund, isFunding } = useStellarWallet();
   const balance = xlmBalance === null ? null : parseFloat(xlmBalance);
 
@@ -686,6 +830,19 @@ function FamilyBankCard() {
       <p className="mt-2.5 text-[12px] font-semibold text-muted-foreground text-pretty">
         Your family bank lives on Stellar — top it up any time to fund rewards.
       </p>
+
+      {/* Quiet secondary action: set up a steady drip into a kid's stash. */}
+      <button
+        type="button"
+        onClick={() => navigate({ to: "/streams" })}
+        className="press-pop mt-3 flex w-full items-center gap-2 rounded-2xl border-2 border-m-ink/25 bg-white/60 px-3.5 py-2.5 text-left"
+      >
+        <DropIcon className="size-4 shrink-0 text-m-green-ink" weight="duotone" />
+        <span className="min-w-0 flex-1 truncate font-display text-[13px] font-extrabold text-foreground">
+          Set up allowance
+        </span>
+        <CaretRightIcon className="size-4 shrink-0 text-muted-foreground" weight="bold" />
+      </button>
     </div>
   );
 }
