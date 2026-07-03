@@ -396,17 +396,32 @@ export function scoopedXlmWithin(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Savings goal — kid-set, per device. Empty until the kid names one; the /me
-//  goal card and the stash mini-card's goal line both read this single store
-//  (audit issue 6: no more hardcoded Lego). Progress = real balance / target.
-//    Shape: { name, targetXlm }
+//  Savings goals — kid-set, per device. A kid can keep a LIST of goals (a new
+//  bike, a game, a trip) with ONE marked active; the /me goals section lists
+//  them all, and the dashboard stash line reads the active one (activeGoal()).
+//  Progress = real balance / active target (audit issue 6: no hardcoded Lego).
+//    Store shape: { goals: [{id, name, targetXlm, createdAt}], activeId }
+//
+//  BACKWARD-COMPAT: the old single-goal store (maestro.goal.v1, {name,targetXlm})
+//  is migrated once into the list on first load, and the legacy loadGoal/saveGoal
+//  helpers survive as thin shims over the active goal — so callers that still ask
+//  for "the goal" (the dashboard stash line via useSavingsGoal) keep working
+//  unchanged. Every list write emits GOAL_EVENT, exactly like the old store did.
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** Legacy single-goal store — migrated once → the v1 list, then superseded. */
 export const GOAL_STORAGE_KEY = "maestro.goal.v1";
+/** The goals LIST store (one active). */
+export const GOALS_STORAGE_KEY = "maestro.goals.v1";
 export const GOAL_EVENT = "maestro:goal-changed";
 /** The goal name is a short label; keep it a chip, not a paragraph. */
 export const GOAL_NAME_MAX = 24;
 
+/**
+ * The single-goal shape the rest of the app still speaks (the dashboard stash
+ * line, the /me active-goal progress). It's the ACTIVE goal, projected out of the
+ * list — callers that only care about "what am I saving for right now" use this.
+ */
 export interface SavingsGoal {
   /** What the kid is saving for ("A new skateboard"). */
   name: string;
@@ -414,39 +429,212 @@ export interface SavingsGoal {
   targetXlm: number;
 }
 
-export function loadGoal(): SavingsGoal | null {
+/** One goal in the list. `id` is stable; `createdAt` orders the list. */
+export interface SavingsGoalItem extends SavingsGoal {
+  id: string;
+  /** Unix ms the goal was added. */
+  createdAt: number;
+}
+
+/** The persisted list store: every goal + which one is active (or null). */
+export interface SavingsGoalsStore {
+  goals: SavingsGoalItem[];
+  /** The active goal's id, or null when none is active / the list is empty. */
+  activeId: string | null;
+}
+
+/** A clean, defensively-defaulted empty store. */
+function emptyGoals(): SavingsGoalsStore {
+  return { goals: [], activeId: null };
+}
+
+/** Coerce/clamp one raw goal into a valid item, or null if unusable. */
+function normalizeGoalItem(raw: unknown): SavingsGoalItem | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Partial<SavingsGoalItem>;
+  const name = typeof r.name === "string" ? r.name.trim().slice(0, GOAL_NAME_MAX) : "";
+  if (!name || typeof r.targetXlm !== "number" || !(r.targetXlm > 0)) return null;
+  return {
+    id: typeof r.id === "string" && r.id ? r.id : randomId(),
+    name,
+    targetXlm: r.targetXlm,
+    createdAt: typeof r.createdAt === "number" ? r.createdAt : Date.now(),
+  };
+}
+
+/**
+ * One-time migration: if the legacy single-goal store exists and the list store
+ * doesn't yet, lift that one goal in as the FIRST goal AND the active one, then
+ * drop the legacy key. Returns the migrated store, or null when there's nothing
+ * to migrate (so loadGoals falls through to the real list read).
+ */
+function migrateGoalV1(): SavingsGoalsStore | null {
+  let rawV1: string | null;
   try {
-    const raw = localStorage.getItem(GOAL_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as SavingsGoal;
-    if (
-      !parsed ||
-      typeof parsed !== "object" ||
-      typeof parsed.name !== "string" ||
-      typeof parsed.targetXlm !== "number"
-    )
-      return null;
-    const name = parsed.name.trim();
-    if (!name || !(parsed.targetXlm > 0)) return null;
-    return { name: name.slice(0, GOAL_NAME_MAX), targetXlm: parsed.targetXlm };
+    rawV1 = localStorage.getItem(GOAL_STORAGE_KEY);
   } catch {
     return null;
   }
+  if (rawV1 == null) return null;
+
+  // Never clobber a real list store if one already exists.
+  let hasList = false;
+  try {
+    hasList = localStorage.getItem(GOALS_STORAGE_KEY) != null;
+  } catch {
+    /* ignore */
+  }
+
+  let migrated: SavingsGoalsStore | null = null;
+  if (!hasList) {
+    let item: SavingsGoalItem | null = null;
+    try {
+      item = normalizeGoalItem(JSON.parse(rawV1));
+    } catch {
+      item = null; // corrupt legacy value — just drop it
+    }
+    const store = item ? { goals: [item], activeId: item.id } : emptyGoals();
+    try {
+      localStorage.setItem(GOALS_STORAGE_KEY, JSON.stringify(store));
+    } catch {
+      /* ignore */
+    }
+    migrated = store;
+  }
+  // The legacy key's job is done either way — remove it so it can't re-migrate.
+  try {
+    localStorage.removeItem(GOAL_STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
+  return migrated;
 }
 
-/** Save (or, with null, clear) the goal. Emits a same-tab change event. */
-export function saveGoal(goal: SavingsGoal | null): void {
+/**
+ * Load the goals list (running the one-time v1 migration first). Always returns
+ * a well-formed store: bad entries are dropped, and `activeId` is repaired to a
+ * real goal (or the first one) so the active projection can't dangle.
+ */
+export function loadGoals(): SavingsGoalsStore {
   try {
-    if (goal === null) {
-      localStorage.removeItem(GOAL_STORAGE_KEY);
-    } else {
-      const name = goal.name.trim().slice(0, GOAL_NAME_MAX);
-      if (!name || !(goal.targetXlm > 0)) return;
-      localStorage.setItem(GOAL_STORAGE_KEY, JSON.stringify({ name, targetXlm: goal.targetXlm }));
+    const migrated = migrateGoalV1();
+    if (migrated) return migrated;
+    const raw = localStorage.getItem(GOALS_STORAGE_KEY);
+    if (!raw) return emptyGoals();
+    const parsed = JSON.parse(raw) as Partial<SavingsGoalsStore>;
+    const goals = Array.isArray(parsed?.goals)
+      ? parsed!.goals.map(normalizeGoalItem).filter((g): g is SavingsGoalItem => g !== null)
+      : [];
+    let activeId =
+      typeof parsed?.activeId === "string" ? parsed!.activeId : null;
+    // Repair a dangling/absent active id: keep it if valid, else fall to first.
+    if (!goals.some((g) => g.id === activeId)) {
+      activeId = goals.length > 0 ? goals[0].id : null;
     }
+    return { goals, activeId };
+  } catch {
+    return emptyGoals();
+  }
+}
+
+/** Persist the list + emit the same-tab change event the whole app listens on. */
+function saveGoals(store: SavingsGoalsStore): void {
+  try {
+    localStorage.setItem(GOALS_STORAGE_KEY, JSON.stringify(store));
     if (typeof window !== "undefined") window.dispatchEvent(new Event(GOAL_EVENT));
   } catch {
     /* ignore */
+  }
+}
+
+/**
+ * Add a goal. It becomes active when it's the first goal (empty state → straight
+ * to a live goal); otherwise the current active stays put. Returns the new item,
+ * or null when the name/target are unusable.
+ */
+export function addGoal(input: SavingsGoal): SavingsGoalItem | null {
+  const item = normalizeGoalItem({ ...input, id: randomId(), createdAt: Date.now() });
+  if (!item) return null;
+  const cur = loadGoals();
+  const goals = [...cur.goals, item];
+  const activeId = cur.activeId ?? item.id; // first goal auto-activates
+  saveGoals({ goals, activeId });
+  return item;
+}
+
+/** Edit a goal's name/target in place (id-matched). No-op if id/values invalid. */
+export function editGoal(id: string, patch: SavingsGoal): void {
+  const cur = loadGoals();
+  const next = cur.goals.map((g) =>
+    g.id === id ? normalizeGoalItem({ ...g, ...patch, id: g.id, createdAt: g.createdAt }) : g,
+  );
+  // Drop any entry that failed to normalize (bad patch) rather than corrupt it.
+  const goals = next.filter((g): g is SavingsGoalItem => g !== null);
+  saveGoals({ goals, activeId: cur.activeId });
+}
+
+/**
+ * Remove a goal. If it was the active one, the active hops to the first
+ * remaining goal (or null when the list empties out).
+ */
+export function removeGoal(id: string): void {
+  const cur = loadGoals();
+  const goals = cur.goals.filter((g) => g.id !== id);
+  const activeId =
+    cur.activeId === id ? (goals[0]?.id ?? null) : cur.activeId;
+  saveGoals({ goals, activeId });
+}
+
+/** Mark one goal active (must exist). No-op for an unknown id. */
+export function setActiveGoal(id: string): void {
+  const cur = loadGoals();
+  if (!cur.goals.some((g) => g.id === id)) return;
+  saveGoals({ goals: cur.goals, activeId: id });
+}
+
+/**
+ * The ACTIVE goal projected to {name, targetXlm}, or null when none is active.
+ * This is the single-goal view the dashboard stash line + progress read.
+ */
+export function activeGoal(): SavingsGoal | null {
+  const { goals, activeId } = loadGoals();
+  const g = goals.find((x) => x.id === activeId);
+  return g ? { name: g.name, targetXlm: g.targetXlm } : null;
+}
+
+// ── Legacy shims (kept so existing callers/imports keep compiling unchanged) ──
+//
+// The app used to store ONE goal (maestro.goal.v1) and read it via loadGoal /
+// write it via saveGoal. Those two names survive as thin shims over the list:
+// loadGoal returns the ACTIVE goal; saveGoal edits the active goal (or adds the
+// first one, or — with null — clears the active goal). useSavingsGoal (which the
+// dashboard stash line consumes) is built on these, so it keeps working as-is.
+
+/** Legacy: the active goal (or null). Prefer activeGoal() in new code. */
+export function loadGoal(): SavingsGoal | null {
+  return activeGoal();
+}
+
+/**
+ * Legacy single-goal setter, mapped onto the list:
+ *   • null            → clear the active goal (deactivate; the list is kept).
+ *   • existing active → edit it in place.
+ *   • no active yet   → add it as a new (auto-active) goal.
+ * Prefer addGoal/editGoal/setActiveGoal/removeGoal in new code.
+ */
+export function saveGoal(goal: SavingsGoal | null): void {
+  const cur = loadGoals();
+  if (goal === null) {
+    // Deactivate (don't nuke the whole list — that would delete other goals).
+    if (cur.activeId !== null) saveGoals({ goals: cur.goals, activeId: null });
+    return;
+  }
+  const name = goal.name.trim().slice(0, GOAL_NAME_MAX);
+  if (!name || !(goal.targetXlm > 0)) return;
+  if (cur.activeId && cur.goals.some((g) => g.id === cur.activeId)) {
+    editGoal(cur.activeId, { name, targetXlm: goal.targetXlm });
+  } else {
+    addGoal({ name, targetXlm: goal.targetXlm });
   }
 }
 

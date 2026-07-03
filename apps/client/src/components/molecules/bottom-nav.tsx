@@ -12,14 +12,19 @@ type NavItem = {
 // Home / Family / Me — every tab answers a real question: mine / ours / me
 // (DESIGN-STORY §4 nav survivor). Sibling routes fold into their home tab:
 // rewards + the private-claim flow live under Home; the treasury feed and the
-// old /circles + /history live under Family; /streams (allowance setup) is
-// reached from Me → For grown-ups, so it lights up the Me tab.
+// old /circles + /history live under Family; /allowance (and its old /streams
+// path) is a parent tool reached from the Family Bank on Home, so it lights up
+// the Home tab.
 const items: NavItem[] = [
   {
     to: "/dashboard",
     label: "Home",
     icon: HouseIcon,
-    match: (p) => p === "/dashboard" || p.startsWith("/rewards"),
+    match: (p) =>
+      p === "/dashboard" ||
+      p.startsWith("/rewards") ||
+      p.startsWith("/allowance") ||
+      p.startsWith("/streams"),
   },
   {
     to: "/family",
@@ -34,10 +39,7 @@ const items: NavItem[] = [
     to: "/me",
     label: "Me",
     icon: SmileyIcon,
-    match: (p) =>
-      p.startsWith("/me") ||
-      p.startsWith("/settings") ||
-      p.startsWith("/streams"),
+    match: (p) => p.startsWith("/me") || p.startsWith("/settings"),
   },
 ];
 

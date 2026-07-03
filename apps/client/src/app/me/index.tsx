@@ -12,7 +12,7 @@
 // The old debug footer's treasury internals are pure plumbing — gone from the UI.
 
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   CopyIcon,
   CheckIcon,
@@ -26,6 +26,7 @@ import {
   LockIcon,
   DropIcon,
   PencilSimpleIcon,
+  TrashIcon,
   MinusIcon,
   PlusIcon,
 } from "@phosphor-icons/react";
@@ -43,10 +44,46 @@ import { Button } from "@/components/atoms/button";
 import { Input } from "@/components/atoms/input";
 import { toast } from "sonner";
 import { useStellarWallet } from "@/providers/stellar-wallet-provider";
-import { useFamily, useKidStreak, useSavingsGoal } from "@/hooks/use-family";
+import { useFamily, useKidStreak } from "@/hooks/use-family";
 import { useTreasuryHistory } from "@/hooks/use-treasury-history";
-import { GOAL_NAME_MAX, type SavingsGoal } from "@/lib/family";
+import {
+  GOAL_NAME_MAX,
+  GOAL_EVENT,
+  loadGoals,
+  addGoal,
+  editGoal,
+  removeGoal,
+  setActiveGoal,
+  type SavingsGoal,
+  type SavingsGoalItem,
+} from "@/lib/family";
 import { truncateAddress } from "@/utils";
+
+// ── useSavingsGoals — the goals LIST (one active), per device ─────────────────
+//
+// A local hook (use-family.ts is owned by another agent this pass, so the list
+// state lives here). Reads the maestro.goals.v1 store and refreshes on the same
+// GOAL_EVENT the legacy single-goal store emitted — so the dashboard's stash
+// line (still on useSavingsGoal → the active goal) and this section stay in sync.
+function useSavingsGoals() {
+  const [store, setStore] = useState(() =>
+    typeof window === "undefined" ? { goals: [], activeId: null } : loadGoals(),
+  );
+  useEffect(() => {
+    const reload = () => setStore(loadGoals());
+    window.addEventListener(GOAL_EVENT, reload);
+    window.addEventListener("storage", reload);
+    return () => {
+      window.removeEventListener(GOAL_EVENT, reload);
+      window.removeEventListener("storage", reload);
+    };
+  }, []);
+  const add = useCallback((g: SavingsGoal) => addGoal(g), []);
+  const edit = useCallback((id: string, g: SavingsGoal) => editGoal(id, g), []);
+  const remove = useCallback((id: string) => removeGoal(id), []);
+  const activate = useCallback((id: string) => setActiveGoal(id), []);
+  return { goals: store.goals, activeId: store.activeId, add, edit, remove, activate };
+}
 
 export const Route = createFileRoute("/me/")({
   component: MePage,
@@ -64,8 +101,9 @@ function MePage() {
   // Real XLM balance is the stash (unfunded is a valid 0, not an error).
   const stashBalance = xlmBalance === null ? null : parseFloat(xlmBalance);
 
-  // Real goal (kid-set) + real streak (from the done log). No more Lego sample.
-  const { goal, setSavingsGoal } = useSavingsGoal();
+  // Real goals (kid-set, a list with one active) + real streak (from the done
+  // log). No more Lego sample; no more one-goal cap.
+  const goals = useSavingsGoals();
   const streakDays = useKidStreak(myName);
 
   return (
@@ -108,31 +146,31 @@ function MePage() {
         </div>
       </div>
 
-      {/* Goal + streak. The goal is real (kid-set); the streak renders only when
-          it's live — a zero streak is a sad zero, so it hides entirely. When the
-          streak hides, the goal card takes the full width. */}
-      <div className={streakDays > 0 ? "grid grid-cols-2 gap-3" : ""}>
-        <GoalCard
-          balance={stashBalance}
-          goal={goal}
-          onSave={setSavingsGoal}
-        />
-        {streakDays > 0 && (
-          <div className="animate-pop-in card-pop card-pop-pink p-4">
-            <IconTile icon={FireIcon} tint="pink" bordered />
-            <p className="text-microlabel mt-3 text-muted-foreground">Streak</p>
+      {/* Streak — renders only when it's live (a zero streak is a sad zero, so it
+          hides entirely). It sits full-width above the goals section now that a
+          kid can keep several goals (the list wants the room). */}
+      {streakDays > 0 && (
+        <div className="animate-pop-in card-pop card-pop-pink flex items-center gap-3 p-4">
+          <IconTile icon={FireIcon} tint="pink" size="lg" bordered />
+          <div className="min-w-0 flex-1">
+            <p className="text-microlabel text-muted-foreground">Streak</p>
             <p className="font-display text-2xl font-extrabold leading-tight tabular-nums text-m-pink">
               {streakDays}
               <span className="ml-1 text-sm font-extrabold text-muted-foreground">
                 {streakDays === 1 ? "day" : "days"}
               </span>
-            </p>
-            <p className="mt-0.5 text-[12px] font-bold text-muted-foreground">
-              Keep it going!
+              <span className="ml-2 align-middle text-[12px] font-bold text-muted-foreground">
+                Keep it going!
+              </span>
             </p>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* Goals — real (kid-set), a list with one active. The active goal shows a
+          progress bar (balance / target); tap another to make it active; each has
+          a quiet edit + remove. Empty until the first goal is named. */}
+      <GoalsSection balance={stashBalance} goals={goals} />
 
       {/* For grown-ups — quiet, collapsed. Plumbing lives here, never up top. */}
       <GrownupsPanel
@@ -144,26 +182,53 @@ function MePage() {
   );
 }
 
-// ── Goal card — real, kid-set. Empty until named; a quiet pencil edits it. ────
+// ── Goals section — real, kid-set. A list with one active goal. ───────────────
+//
+// One card holds every goal the kid is saving toward. The ACTIVE goal sits on
+// top, highlighted, with a live progress bar (balance / target). The rest are
+// quiet rows you can tap to make active. Each goal has a pencil (edit) and a
+// trash (remove). Empty until the first goal is named ("What are you saving
+// for?"). "Add a goal" opens the same dialog used for editing.
 
-function GoalCard({
+function GoalsSection({
   balance,
-  goal,
-  onSave,
+  goals,
 }: {
   balance: number | null;
-  goal: SavingsGoal | null;
-  onSave: (goal: SavingsGoal | null) => void;
+  goals: ReturnType<typeof useSavingsGoals>;
 }) {
-  const [editing, setEditing] = useState(false);
+  const { goals: list, activeId, add, edit, remove, activate } = goals;
+  // The dialog is either adding (editItem === null) or editing a specific goal.
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editItem, setEditItem] = useState<SavingsGoalItem | null>(null);
 
-  // No goal yet → the invite to set one ("What are you saving for?").
-  if (!goal) {
+  const openAdd = () => {
+    setEditItem(null);
+    setDialogOpen(true);
+  };
+  const openEdit = (item: SavingsGoalItem) => {
+    setEditItem(item);
+    setDialogOpen(true);
+  };
+  const onSave = (draft: SavingsGoal) => {
+    if (editItem) edit(editItem.id, draft);
+    else add(draft);
+    setDialogOpen(false);
+  };
+
+  // Active first, then the rest by newest-added — the thing you're chasing leads.
+  const active = list.find((g) => g.id === activeId) ?? null;
+  const rest = list
+    .filter((g) => g.id !== activeId)
+    .sort((a, b) => b.createdAt - a.createdAt);
+
+  // Empty state → the warm invite to name a first goal.
+  if (list.length === 0) {
     return (
       <>
         <button
           type="button"
-          onClick={() => setEditing(true)}
+          onClick={openAdd}
           className="animate-pop-in press-pop card-pop card-pop-lilac flex w-full flex-col items-start p-4 text-left"
         >
           <IconTile icon={TargetIcon} tint="purple" bordered />
@@ -176,42 +241,136 @@ function GoalCard({
           </p>
         </button>
         <GoalDialog
-          open={editing}
+          open={dialogOpen}
           initial={null}
-          onOpenChange={setEditing}
+          onOpenChange={setDialogOpen}
           onSave={onSave}
         />
       </>
     );
   }
 
-  // Real progress: balance / target, capped at 100%.
-  const pct =
-    balance === null || goal.targetXlm <= 0
-      ? 0
-      : Math.min(100, Math.round((balance / goal.targetXlm) * 100));
-
   return (
     <>
-      <div className="animate-pop-in card-pop card-pop-lilac relative p-4">
-        <div className="flex items-start justify-between">
-          <IconTile icon={TargetIcon} tint="purple" bordered />
+      <section className="space-y-3">
+        <div className="flex items-center justify-between px-1">
+          <h2 className="flex items-center gap-1.5 font-display text-lg font-extrabold">
+            <TargetIcon className="size-4 text-m-purple" weight="duotone" />
+            Saving for
+          </h2>
           <button
             type="button"
-            onClick={() => setEditing(true)}
-            aria-label="Edit goal"
-            className="press-pop -mr-1 -mt-1 flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-white/50 hover:text-foreground"
+            onClick={openAdd}
+            className="press-pop flex items-center gap-1 rounded-full border-2 border-m-ink bg-m-lilac px-3 py-1 text-xs font-extrabold text-m-purple shadow-[var(--m-pop-sm)]"
           >
-            <PencilSimpleIcon className="size-4" weight="bold" />
+            <PlusIcon className="size-3.5" weight="bold" />
+            Add a goal
           </button>
         </div>
-        <p className="text-microlabel mt-3 text-muted-foreground">Saving for</p>
-        <p className="truncate font-display text-[15px] font-extrabold leading-tight">
-          {goal.name}
-        </p>
-        <p className="mt-0.5 font-display text-sm font-extrabold tabular-nums text-m-purple">
-          {goal.targetXlm.toFixed(0)} XLM
-        </p>
+
+        <div className="space-y-2.5">
+          {/* Active goal — highlighted, with the real progress bar. */}
+          {active && (
+            <GoalRow
+              item={active}
+              active
+              balance={balance}
+              onEdit={() => openEdit(active)}
+              onRemove={() => remove(active.id)}
+            />
+          )}
+          {/* The rest — tap to make active. */}
+          {rest.map((item) => (
+            <GoalRow
+              key={item.id}
+              item={item}
+              active={false}
+              balance={balance}
+              onActivate={() => activate(item.id)}
+              onEdit={() => openEdit(item)}
+              onRemove={() => remove(item.id)}
+            />
+          ))}
+        </div>
+      </section>
+
+      <GoalDialog
+        open={dialogOpen}
+        initial={editItem}
+        onOpenChange={setDialogOpen}
+        onSave={onSave}
+      />
+    </>
+  );
+}
+
+/**
+ * One goal row. The ACTIVE goal is a filled lilac card with a progress bar; the
+ * rest are quiet outlined rows with a "Set active" tap target. Both carry a
+ * pencil (edit) and a trash (remove).
+ */
+function GoalRow({
+  item,
+  active,
+  balance,
+  onActivate,
+  onEdit,
+  onRemove,
+}: {
+  item: SavingsGoalItem;
+  active: boolean;
+  balance: number | null;
+  onActivate?: () => void;
+  onEdit: () => void;
+  onRemove: () => void;
+}) {
+  // Real progress: balance / target, capped at 100%.
+  const pct =
+    balance === null || item.targetXlm <= 0
+      ? 0
+      : Math.min(100, Math.round((balance / item.targetXlm) * 100));
+
+  // The little pencil + trash pair, shared by both row shapes.
+  const controls = (
+    <div className="flex shrink-0 items-center gap-0.5">
+      <button
+        type="button"
+        onClick={onEdit}
+        aria-label={`Edit ${item.name}`}
+        className="press-pop flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-white/50 hover:text-foreground"
+      >
+        <PencilSimpleIcon className="size-4" weight="bold" />
+      </button>
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label={`Remove ${item.name}`}
+        className="press-pop flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-white/50 hover:text-m-pink"
+      >
+        <TrashIcon className="size-4" weight="bold" />
+      </button>
+    </div>
+  );
+
+  if (active) {
+    return (
+      <div className="animate-pop-in card-pop card-pop-lilac p-4">
+        <div className="flex items-start gap-3">
+          <IconTile icon={TargetIcon} tint="purple" bordered />
+          <div className="min-w-0 flex-1">
+            <span className="text-microlabel inline-flex items-center gap-1 text-m-purple">
+              <SparkleIcon className="size-3" weight="fill" />
+              Active
+            </span>
+            <p className="truncate font-display text-[15px] font-extrabold leading-tight">
+              {item.name}
+            </p>
+            <p className="mt-0.5 font-display text-sm font-extrabold tabular-nums text-m-purple">
+              {item.targetXlm.toFixed(0)} XLM
+            </p>
+          </div>
+          {controls}
+        </div>
         {/* Real progress bar. */}
         <div className="mt-2.5 h-2.5 w-full overflow-hidden rounded-full border-2 border-m-ink bg-white/60">
           <div
@@ -223,17 +382,33 @@ function GoalCard({
           {pct}%
         </p>
       </div>
-      <GoalDialog
-        open={editing}
-        initial={goal}
-        onOpenChange={setEditing}
-        onSave={onSave}
-      />
-    </>
+    );
+  }
+
+  // Inactive row: the name/target is a tap target that makes this goal active.
+  return (
+    <div className="animate-pop-in card-pop flex items-center gap-2 bg-card/70 p-3">
+      <button
+        type="button"
+        onClick={onActivate}
+        className="press-pop -m-1 flex min-w-0 flex-1 items-center gap-3 rounded-2xl p-1 text-left"
+      >
+        <IconTile icon={TargetIcon} tint="neutral" bordered />
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-display text-[15px] font-extrabold leading-tight">
+            {item.name}
+          </p>
+          <p className="mt-0.5 text-[12px] font-bold tabular-nums text-muted-foreground">
+            {item.targetXlm.toFixed(0)} XLM · Tap to make active
+          </p>
+        </div>
+      </button>
+      {controls}
+    </div>
   );
 }
 
-/** The small set-a-goal dialog: name (≤24 chars) + target XLM stepper. */
+/** The small add/edit-a-goal dialog: name (≤24 chars) + target XLM stepper. */
 function GoalDialog({
   open,
   initial,
@@ -243,7 +418,7 @@ function GoalDialog({
   open: boolean;
   initial: SavingsGoal | null;
   onOpenChange: (open: boolean) => void;
-  onSave: (goal: SavingsGoal | null) => void;
+  onSave: (goal: SavingsGoal) => void;
 }) {
   const [name, setName] = useState(initial?.name ?? "");
   const [target, setTarget] = useState<number>(initial?.targetXlm ?? 25);
@@ -329,17 +504,6 @@ function GoalDialog({
         </div>
 
         <DialogFooter>
-          {initial && (
-            <Button
-              variant="outline"
-              onClick={() => {
-                onSave(null);
-                onOpenChange(false);
-              }}
-            >
-              Clear
-            </Button>
-          )}
           <Button
             disabled={!canSave}
             onClick={() => {
@@ -347,7 +511,7 @@ function GoalDialog({
               onOpenChange(false);
             }}
           >
-            {initial ? "Save" : "Set goal"}
+            {initial ? "Save" : "Add goal"}
           </Button>
         </DialogFooter>
       </DialogContent>

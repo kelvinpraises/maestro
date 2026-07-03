@@ -58,8 +58,9 @@ export function QuestCard({
       onClick={onClick}
       className={cn(
         "group press-pop card-pop flex w-full items-center gap-3.5 p-3 text-left",
-        t.card,
-        done && "opacity-70",
+        // Done reads quiet: a muted mint tint (not the loud green chore fill) and
+        // a dialed-back opacity, so the active list stays the star.
+        done ? "card-pop-mint opacity-60" : t.card,
         className,
       )}
     >
@@ -77,7 +78,7 @@ export function QuestCard({
         <p
           className={cn(
             "truncate font-display text-[15px] font-bold text-foreground",
-            done && "line-through decoration-2",
+            done && "text-foreground/60 line-through decoration-2",
           )}
         >
           {title}
@@ -87,9 +88,13 @@ export function QuestCard({
             {note}
           </p>
         )}
-        <span className="mt-0.5 inline-flex items-center gap-1 rounded-full border border-m-ink/25 bg-white/70 px-2 py-0.5 text-[13px] font-extrabold text-m-green-ink tabular-nums">
-          +{amount.toFixed(2)} XLM
-        </span>
+        {/* Done hides the reward pill — the money already landed; the row is now
+            just a struck receipt, not another thing to earn. */}
+        {!done && (
+          <span className="mt-0.5 inline-flex items-center gap-1 rounded-full border border-m-ink/25 bg-white/70 px-2 py-0.5 text-[13px] font-extrabold text-m-green-ink tabular-nums">
+            +{amount.toFixed(2)} XLM
+          </span>
+        )}
       </div>
 
       {/* status affordance */}
@@ -100,8 +105,8 @@ export function QuestCard({
             Pending
           </span>
         ) : done ? (
-          <span className="flex size-9 items-center justify-center rounded-full border-2 border-m-ink bg-primary text-primary-foreground shadow-[var(--m-pop-sm)]">
-            <CheckIcon className="size-5" weight="bold" />
+          <span className="flex size-7 items-center justify-center rounded-full border-2 border-m-ink/40 bg-m-mint/60 text-m-green-ink">
+            <CheckIcon className="size-4" weight="bold" />
           </span>
         ) : (
           <span className="flex size-9 items-center justify-center rounded-full border-2 border-m-ink bg-white text-foreground shadow-[var(--m-pop-sm)] transition-transform duration-200 [@media(hover:hover)]:group-hover:translate-x-0.5">

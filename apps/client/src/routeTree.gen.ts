@@ -22,6 +22,7 @@ import { Route as RewardsIndexRouteImport } from './app/rewards/index'
 import { Route as MeIndexRouteImport } from './app/me/index'
 import { Route as FamilyIndexRouteImport } from './app/family/index'
 import { Route as CirclesIndexRouteImport } from './app/circles/index'
+import { Route as AllowanceIndexRouteImport } from './app/allowance/index'
 
 const WelcomeRoute = WelcomeRouteImport.update({
   id: '/welcome',
@@ -88,6 +89,11 @@ const CirclesIndexRoute = CirclesIndexRouteImport.update({
   path: '/circles/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AllowanceIndexRoute = AllowanceIndexRouteImport.update({
+  id: '/allowance/',
+  path: '/allowance/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -98,6 +104,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/setup': typeof SetupRoute
   '/welcome': typeof WelcomeRoute
+  '/allowance/': typeof AllowanceIndexRoute
   '/circles/': typeof CirclesIndexRoute
   '/family/': typeof FamilyIndexRoute
   '/me/': typeof MeIndexRoute
@@ -113,6 +120,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/setup': typeof SetupRoute
   '/welcome': typeof WelcomeRoute
+  '/allowance': typeof AllowanceIndexRoute
   '/circles': typeof CirclesIndexRoute
   '/family': typeof FamilyIndexRoute
   '/me': typeof MeIndexRoute
@@ -129,6 +137,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/setup': typeof SetupRoute
   '/welcome': typeof WelcomeRoute
+  '/allowance/': typeof AllowanceIndexRoute
   '/circles/': typeof CirclesIndexRoute
   '/family/': typeof FamilyIndexRoute
   '/me/': typeof MeIndexRoute
@@ -146,6 +155,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/setup'
     | '/welcome'
+    | '/allowance/'
     | '/circles/'
     | '/family/'
     | '/me/'
@@ -161,6 +171,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/setup'
     | '/welcome'
+    | '/allowance'
     | '/circles'
     | '/family'
     | '/me'
@@ -176,6 +187,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/setup'
     | '/welcome'
+    | '/allowance/'
     | '/circles/'
     | '/family/'
     | '/me/'
@@ -192,6 +204,7 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   SetupRoute: typeof SetupRoute
   WelcomeRoute: typeof WelcomeRoute
+  AllowanceIndexRoute: typeof AllowanceIndexRoute
   CirclesIndexRoute: typeof CirclesIndexRoute
   FamilyIndexRoute: typeof FamilyIndexRoute
   MeIndexRoute: typeof MeIndexRoute
@@ -292,6 +305,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CirclesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/allowance/': {
+      id: '/allowance/'
+      path: '/allowance'
+      fullPath: '/allowance/'
+      preLoaderRoute: typeof AllowanceIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -304,6 +324,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   SetupRoute: SetupRoute,
   WelcomeRoute: WelcomeRoute,
+  AllowanceIndexRoute: AllowanceIndexRoute,
   CirclesIndexRoute: CirclesIndexRoute,
   FamilyIndexRoute: FamilyIndexRoute,
   MeIndexRoute: MeIndexRoute,

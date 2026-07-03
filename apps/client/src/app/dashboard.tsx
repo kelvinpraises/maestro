@@ -172,25 +172,27 @@ function KidHome({ chores }: { chores: ChoreRow[] }) {
 
   // A kid sees chores assigned to them or unassigned ("anyone"); chores owned by
   // OTHER kids don't render here. Each row's status is this kid's own effective
-  // (freshness-derived) state. We split into three groups (audit survivor):
-  //   1. MINE      — assigned to me, not yet done this period.
-  //   2. ANYONE    — shared chores, not yet done this period.
-  //   3. CRUSHED   — anything I completed this period, rendered proud.
-  const { mine, anyone, crushed } = useMemo(() => {
+  // (freshness-derived) state. A done chore LEAVES the active list and drops into
+  // its own quiet, struck-through "Done" section (owner ask). Pending stays
+  // active with its waiting badge. So we split into:
+  //   1. MINE   — assigned to me, still active (todo/pending).
+  //   2. ANYONE — shared chores, still active (todo/pending).
+  //   3. DONE   — anything I completed this period, struck out at the bottom.
+  const { mine, anyone, done } = useMemo(() => {
     const mine: { chore: ChoreRow; status: ChoreState }[] = [];
     const anyone: { chore: ChoreRow; status: ChoreState }[] = [];
-    const crushed: { chore: ChoreRow; status: ChoreState }[] = [];
+    const done: { chore: ChoreRow; status: ChoreState }[] = [];
     for (const c of chores) {
       if (c.assignee && c.assignee !== myName) continue; // someone else's
       const status = stateFor(c, myName);
-      if (status === "done") crushed.push({ chore: c, status });
+      if (status === "done") done.push({ chore: c, status });
       else if (c.assignee === myName) mine.push({ chore: c, status });
       else anyone.push({ chore: c, status });
     }
-    return { mine, anyone, crushed };
+    return { mine, anyone, done };
   }, [chores, myName, stateFor]);
 
-  const totalMine = mine.length + anyone.length + crushed.length;
+  const totalMine = mine.length + anyone.length + done.length;
   const choresLeft = mine.length + anyone.length;
 
   // Real XLM balance drives the stash card. Unfunded is a valid 0, not an error.
@@ -289,7 +291,9 @@ function KidHome({ chores }: { chores: ChoreRow[] }) {
         <CaretRightIcon className="size-5 text-muted-foreground" weight="bold" />
       </button>
 
-      {/* My chores today — mine first, then anyone-chores, then Crushed today. */}
+      {/* My chores today — active chores (mine, then anyone-chores); done ones
+          leave the active list and collect struck-through in a quiet "Done"
+          section at the bottom. */}
       <section className="space-y-4">
         <div className="flex items-center justify-between px-1">
           <h2 className="flex items-center gap-1.5 font-display text-lg font-extrabold">
@@ -361,10 +365,10 @@ function KidHome({ chores }: { chores: ChoreRow[] }) {
               </ChoreGroup>
             )}
 
-            {/* 3 — Crushed today (done), rendered proud, not crossed-out. */}
-            {crushed.length > 0 && (
-              <ChoreGroup label="Crushed today 💪">
-                {crushed.map(({ chore: c, status }) => (
+            {/* 3 — Done: out of the active list, struck through and quiet. */}
+            {done.length > 0 && (
+              <ChoreGroup label="Done">
+                {done.map(({ chore: c, status }) => (
                   <ChoreRowKid
                     key={c.id}
                     chore={c}
@@ -429,9 +433,10 @@ function ChoreGroup({
 }
 
 /**
- * One kid chore row. todo/pending tap open the chore card; done renders proud
- * (mint + check) via QuestCard, and also opens the card (read-only-ish) on tap.
- * Pending keeps its own row with the waiting badge, inside its group.
+ * One kid chore row. todo/pending tap open the chore card; done renders quiet
+ * and struck-through (muted mint + a small check) via QuestCard, and still opens
+ * the card (read-only-ish) on tap. Pending keeps its own row with the waiting
+ * badge, inside the active list (never in Done).
  */
 function ChoreRowKid({
   chore,
