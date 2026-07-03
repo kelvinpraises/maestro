@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 #
 # Redeploy the four Maestro Soroban contracts to Stellar testnet and write the
-# resulting IDs to deployments.testnet.env.
+# resulting IDs to apps/contracts/deployments.testnet.env.
 #
 # Prereqs:
 #   - Stellar CLI v27 on PATH
 #   - identity `maestro-deployer` exists and is funded on testnet
-#   - contracts built: (cd contracts && cargo build --target wasm32v1-none --release)
+#   - contracts built: (cd apps/contracts && cargo build --target wasm32v1-none --release)
 #
 # Deploy order matters: the verifier and the native SAC must exist before
 # zwerc20 is initialized (it stores both addresses at init).
@@ -14,16 +14,16 @@ set -euo pipefail
 
 export PATH="$HOME/.cargo/bin:/opt/homebrew/bin:$PATH"
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-WASM_DIR="$REPO_ROOT/contracts/target/wasm32v1-none/release"
-OUT="$REPO_ROOT/deployments.testnet.env"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WASM_DIR="$REPO_ROOT/apps/contracts/target/wasm32v1-none/release"
+OUT="$REPO_ROOT/apps/contracts/deployments.testnet.env"
 
 SOURCE="maestro-deployer"
 NETWORK="testnet"
 ADMIN="$(stellar keys address "$SOURCE")"
 
 # Global streams cycle length (seconds). The contract requires cycle_secs > 1
-# (contracts/drips/src/streams.rs::init), so the smallest legal value that keeps
+# (apps/contracts/drips/src/streams.rs::init), so the smallest legal value that keeps
 # the product's "drips second-by-second" feel is 2.
 CYCLE_SECS=2
 

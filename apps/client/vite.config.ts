@@ -46,7 +46,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": resolve(__dirname, "./src"),
-      // The generated Soroban bindings (linked from ../../packages/bindings via
+      // The generated Soroban bindings (linked from ../packages via
       // `file:` deps) `import { Buffer } from "buffer"`. Point bare `buffer` at
       // the real installed polyfill package so those external modules resolve.
       buffer: resolve(__dirname, "node_modules/buffer"),

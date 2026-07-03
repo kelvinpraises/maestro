@@ -43,7 +43,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
-    "drips": "file:../../packages/bindings/drips",
+    "drips": "file:../packages/drips",
     "nanoid": "^5.1.7",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
@@ -54,10 +54,10 @@
     "tailwindcss-animate": "^1.0.7",
     "tw-animate-css": "^1.4.0",
     "vaul": "^1.1.2",
-    "verifier": "file:../../packages/bindings/verifier",
+    "verifier": "file:../packages/verifier",
     "vite-plugin-node-polyfills": "^0.25.0",
-    "yield": "file:../../packages/bindings/yield",
-    "zwerc20": "file:../../packages/bindings/zwerc20"
+    "yield": "file:../packages/yield",
+    "zwerc20": "file:../packages/zwerc20"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",

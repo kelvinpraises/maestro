@@ -5,7 +5,7 @@
 // deployed Soroban contracts backing the family treasury, plus the native-XLM
 // asset (SAC) contract used as the treasury's underlying asset.
 //
-// All IDs are baked from `deployments.testnet.env` at the repo root.
+// All IDs are baked from `apps/contracts/deployments.testnet.env`.
 
 export const STELLAR_NETWORK = {
   /** Soroban RPC endpoint (read/simulate + submit). */

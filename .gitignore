@@ -12,9 +12,9 @@ out/
 .vscode/
 
 # design reference dump (kept local only)
-Hackathon Projects/
+context/design-dump/
 
 # needed by builds despite the generic rules above:
 # proving artifacts (vkey embedded at compile time, zkey/wasm used by the prover)
-!circuits/out/
-!circuits/out/**
+!apps/contracts/circuits/out/
+!apps/contracts/circuits/out/**
