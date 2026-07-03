@@ -62,6 +62,7 @@ import {
 import { requestPostNotice } from "@/hooks/use-family-board";
 import { useAllowanceDrip } from "@/hooks/use-allowance-drip";
 import { useCollectAllowance, type CollectStep } from "@/hooks/use-allowance";
+import { classifyTxError } from "@/lib/tx-errors";
 import { useCountUp } from "@/hooks/use-count-up";
 
 export const Route = createFileRoute("/dashboard")({
@@ -650,7 +651,8 @@ function KidStashCard({
 
           {collect.isError && step === "error" && (
             <p className="mt-2 text-center text-[12px] font-bold text-m-pink text-pretty">
-              The bank line is busy. Your money is safe, try again in a moment.
+              {collect.errorMessage ??
+                "The bank line is busy. Your money is safe, try again in a moment."}
             </p>
           )}
         </div>
@@ -866,7 +868,9 @@ function NodCard({
       </div>
       {stage === "error" && (
         <p className="mt-2 text-center text-[12px] font-bold text-m-pink text-pretty">
-          The bank line is busy. Nothing was sent, tap Approve to try again.
+          {fund.error
+            ? classifyTxError(fund.error, "fund").kidMessage
+            : "The bank line is busy. Nothing was sent, tap Approve to try again."}
         </p>
       )}
     </div>

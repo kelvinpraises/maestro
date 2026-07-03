@@ -15,6 +15,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { drips as dripsRead, withSigner } from "@/contracts/stellar";
 import { recordScoop } from "@/lib/family";
 import { CONTRACT_IDS } from "@/config/stellar";
+import { classifyTxError, retryTransient } from "@/lib/tx-errors";
 import { useStellarWallet } from "@/providers/stellar-wallet-provider";
 import {
   AllowancePeriod,
@@ -230,7 +231,7 @@ export function useCollectAllowance() {
   const { publicKey, refreshBalance } = useStellarWallet();
   const makeSigner = useSignerBundle();
 
-  return useMutation<CollectAllowanceResult, Error, CollectAllowanceParams | void>({
+  const mutation = useMutation<CollectAllowanceResult, Error, CollectAllowanceParams | void>({
     mutationFn: async (params) => {
       const account = publicKey;
       const to = params?.to?.trim() || account;
@@ -246,23 +247,32 @@ export function useCollectAllowance() {
       const receivable = Number(cyclesTx.result);
       const maxCycles = maxCyclesForElapsed(receivable * CYCLE_SECS, CYCLE_SECS);
 
+      // Each leg is wrapped in a transient-only retry: a network/RPC blip mid-
+      // pipeline gets another turn with backoff, but a deterministic reject is
+      // surfaced at once (never mislabeled "busy, try again"). Single-use
+      // AssembledTransactions are rebuilt per attempt. Pipeline logic unchanged.
+
       // 1) receive up to `maxCycles` whole elapsed cycles into splittable.
-      const receiveTx = await drips.receive_streams({
-        account,
-        token: TOKEN,
-        max_cycles: maxCycles,
-      });
-      const receiveSent = await receiveTx.signAndSend();
-      const received = receiveSent.result;
+      const received = await retryTransient(async () => {
+        const receiveTx = await drips.receive_streams({
+          account,
+          token: TOKEN,
+          max_cycles: maxCycles,
+        });
+        return (await receiveTx.signAndSend()).result;
+      }, "collect");
 
       // 2) split (no sub-receivers ⇒ everything becomes collectable).
-      const splitTx = await drips.split({ account, token: TOKEN });
-      await splitTx.signAndSend();
+      await retryTransient(async () => {
+        const splitTx = await drips.split({ account, token: TOKEN });
+        await splitTx.signAndSend();
+      }, "collect");
 
       // 3) collect → pays real XLM out to `to`.
-      const collectTx = await drips.collect({ account, token: TOKEN, to });
-      const collectSent = await collectTx.signAndSend();
-      const collected = collectSent.result;
+      const collected = await retryTransient(async () => {
+        const collectTx = await drips.collect({ account, token: TOKEN, to });
+        return (await collectTx.signAndSend()).result;
+      }, "collect");
 
       return { received, collected };
     },
@@ -275,4 +285,13 @@ export function useCollectAllowance() {
       queryClient.invalidateQueries({ queryKey: ["allowance-state"] });
     },
   });
+
+  // Kid-safe, truthful copy for the scoop's failure card — a genuine blip reads
+  // "bank line is busy … try again", a deterministic reject reads the honest
+  // reason instead of a retry that can't win. Null until there's an error.
+  const errorMessage = mutation.error
+    ? classifyTxError(mutation.error, "collect").kidMessage
+    : null;
+
+  return Object.assign(mutation, { errorMessage });
 }

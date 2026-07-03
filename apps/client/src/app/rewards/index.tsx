@@ -22,6 +22,7 @@ import {
   type ClaimStep,
   type RewardView,
 } from "@/hooks/use-rewards";
+import { classifyTxError } from "@/lib/tx-errors";
 
 export const Route = createFileRoute("/rewards/")({
   component: RewardsPage,
@@ -174,7 +175,10 @@ function RewardsPage() {
                   });
                 },
                 onError: (e) =>
-                  showNotice({ kind: "error", text: e.message }),
+                  showNotice({
+                    kind: "error",
+                    text: classifyTxError(e, "fund").kidMessage,
+                  }),
               },
             );
           }}
@@ -343,7 +347,8 @@ function ClaimableCard({
 
       {claim.isError && (
         <p className="mt-2 text-center text-[12px] font-bold text-m-pink text-pretty">
-          The bank line is busy. Your reward is safe, try again in a moment.
+          {claim.errorMessage ??
+            "The bank line is busy. Your reward is safe, try again in a moment."}
         </p>
       )}
     </div>

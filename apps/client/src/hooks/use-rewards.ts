@@ -29,6 +29,7 @@ import {
   type ClaimNote,
 } from "@/lib/claims";
 import { xlmToStroops, stroopsToXlm } from "@/lib/allowance";
+import { classifyTxError, retryTransient } from "@/lib/tx-errors";
 
 // ── local note storage (demo-grade) ──────────────────────────────────────────
 
@@ -155,14 +156,18 @@ export function useFundReward() {
       const secret = freshSecret();
       const derived = deriveNote(secret, amountStroops);
 
+      // Deposit is a money tx too — a transient blip on submit gets a bounded
+      // retry with backoff; a deterministic reject (e.g. bank too low) surfaces
+      // at once. Single-use AssembledTransaction rebuilt per attempt.
       const { zwerc20 } = withSigner({ publicKey, signTransaction });
-      const tx = await zwerc20.deposit({
-        from: publicKey,
-        addr20: derived.addr20,
-        amount: amountStroops,
-      });
-      const sent = await tx.signAndSend();
-      const leafIndex = sent.result;
+      const leafIndex = await retryTransient(async () => {
+        const tx = await zwerc20.deposit({
+          from: publicKey,
+          addr20: derived.addr20,
+          amount: amountStroops,
+        });
+        return (await tx.signAndSend()).result;
+      }, "fund");
 
       const note: ClaimNote = {
         id: "0x" + derived.nullifier.toString(16).padStart(64, "0"),
@@ -240,18 +245,26 @@ export function useClaimReward() {
       });
       const { proofBytes } = await generateProof(witness);
 
-      // 3) Remint (pays real XLM to the recipient).
+      // 3) Remint (pays real XLM to the recipient). Wrapped in a transient-only
+      //    retry: a network/RPC blip on submit gets another turn with backoff,
+      //    but a deterministic ledger reject (e.g. this note already claimed) is
+      //    surfaced immediately — never dressed up as "busy, try again". The
+      //    proof + root are computed once above and reused; only the single-use
+      //    AssembledTransaction is rebuilt per attempt. Crypto/tx logic unchanged.
       setStep("submitting");
       const { zwerc20 } = withSigner({ publicKey, signTransaction });
-      const tx = await zwerc20.remint({
-        to: recipient,
-        amount: amountStroops,
-        root,
-        nullifier: derived.nullifier,
-        relayer_fee: 0n,
-        proof: Buffer.from(proofBytes),
-      });
-      await tx.signAndSend();
+      const proof = Buffer.from(proofBytes);
+      await retryTransient(async () => {
+        const tx = await zwerc20.remint({
+          to: recipient,
+          amount: amountStroops,
+          root,
+          nullifier: derived.nullifier,
+          relayer_fee: 0n,
+          proof,
+        });
+        await tx.signAndSend();
+      }, "claim");
 
       setStep("done");
       return { amountStroops };
@@ -268,7 +281,15 @@ export function useClaimReward() {
     mutation.reset();
   }, [mutation]);
 
-  return { ...mutation, step, reset };
+  // Kid-safe, truthful copy for the failure card — distinguishes a genuine
+  // network blip ("bank line is busy … try again") from a deterministic reject
+  // (already claimed / not enough in the bank), rather than lying "try again" at
+  // something that can't succeed. Null until there's an error to describe.
+  const errorMessage = mutation.error
+    ? classifyTxError(mutation.error, "claim").kidMessage
+    : null;
+
+  return { ...mutation, step, reset, errorMessage };
 }
 
 // Re-export for callers that want the field encoding (e.g. share links).
