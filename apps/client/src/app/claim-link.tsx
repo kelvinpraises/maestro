@@ -121,7 +121,7 @@ function ClaimLinkPage() {
                 Reward's yours to claim
               </h1>
               <p className="mt-2 max-w-xs text-[15px] font-bold text-muted-foreground text-pretty">
-                Your {amountXlm.toFixed(2)} XLM is waiting — claim it privately
+                Your {amountXlm.toFixed(2)} XLM is waiting. Claim it privately
                 and watch it land in your stash.
               </p>
             </div>
@@ -141,7 +141,7 @@ function ClaimLinkPage() {
               </h1>
               <p className="mt-2 max-w-xs text-[15px] font-bold text-muted-foreground text-pretty">
                 {payload.label
-                  ? `"${payload.label}" — nice work!`
+                  ? `"${payload.label}", nice work!`
                   : "Someone tucked a little something away for you."}
               </p>
             </div>

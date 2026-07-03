@@ -34,6 +34,13 @@ export interface Chore {
   emoji: string;
   /** Reward in XLM. */
   rewardXlm: number;
+  /**
+   * Optional context ("how it should be done, who's involved"). Shown on the
+   * kid's "I did it!" confirm and as a small line under the chore name.
+   * Travels in the invite link as an OPTIONAL trailing tuple element, so old
+   * links without it keep decoding fine.
+   */
+  note?: string;
 }
 
 /** A kid's local state for a chore (per kid device). */
@@ -218,13 +225,23 @@ export interface InvitePayload {
   chores: Chore[];
 }
 
-/** Compact wire form — short keys; chores as tuples [id,name,emoji,rewardXlm]. */
+/**
+ * Compact wire form — short keys; chores as tuples. The chore tuple is
+ * [id, name, emoji, rewardXlm] with an OPTIONAL trailing `note` element:
+ *   [id, name, emoji, rewardXlm]          ← old links (no note)
+ *   [id, name, emoji, rewardXlm, note]    ← new links (note present)
+ * The 5th element is omitted when the note is empty, so encoded links stay as
+ * small as before, and decode tolerates its absence (old links keep working).
+ */
+type ChoreTuple =
+  | [string, string, string, number]
+  | [string, string, string, number, string];
 interface InviteWire {
   i: string; // familyId
   f: string; // familyName
   p: string; // parentAddress
   k: string; // kidName
-  c: Array<[string, string, string, number]>; // chores
+  c: ChoreTuple[]; // chores
 }
 
 export function encodeInvite(payload: InvitePayload): string {
@@ -233,7 +250,14 @@ export function encodeInvite(payload: InvitePayload): string {
     f: payload.familyName,
     p: payload.parentAddress,
     k: payload.kidName,
-    c: payload.chores.map((ch) => [ch.id, ch.name, ch.emoji, ch.rewardXlm]),
+    c: payload.chores.map((ch): ChoreTuple => {
+      const note = ch.note?.trim();
+      // Omit the trailing element entirely when there's no note (keeps links
+      // as compact as the old 4-tuple shape).
+      return note
+        ? [ch.id, ch.name, ch.emoji, ch.rewardXlm, note]
+        : [ch.id, ch.name, ch.emoji, ch.rewardXlm];
+    }),
   };
   return encodeBlob(wire);
 }
@@ -245,11 +269,14 @@ export function decodeInvite(blob: string): InvitePayload {
     familyName: w.f,
     parentAddress: w.p,
     kidName: w.k,
-    chores: (w.c ?? []).map(([id, name, emoji, rewardXlm]) => ({
+    // Destructure the 5th element defensively — old links won't have it, so
+    // `note` is simply `undefined` there.
+    chores: (w.c ?? []).map(([id, name, emoji, rewardXlm, note]) => ({
       id,
       name,
       emoji,
       rewardXlm,
+      ...(note ? { note } : {}),
     })),
   };
 }
@@ -375,6 +402,54 @@ export function readHashParam(key: string, hash?: string): string | null {
     if (part.slice(0, eq) === key) return decodeURIComponent(part.slice(eq + 1));
   }
   return null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Kid → Stellar address map (local). Lets an allowance drip to a named kid
+//  instead of a raw G-address. A sync layer will auto-fill this later; for now
+//  it's populated the first time a parent pastes a kid's address.
+//    Shape: { [kidName]: "G..." }
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const KID_ADDRESSES_STORAGE_KEY = "maestro.kid-addresses.v1";
+export const KID_ADDRESSES_EVENT = "maestro:kid-addresses-changed";
+
+export type KidAddressMap = Record<string, string>;
+
+export function loadKidAddresses(): KidAddressMap {
+  try {
+    const raw = localStorage.getItem(KID_ADDRESSES_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as KidAddressMap;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+/** The known address for a kid, or null if we've never been told it. */
+export function getKidAddress(kidName: string): string | null {
+  const name = kidName.trim();
+  if (!name) return null;
+  return loadKidAddresses()[name] ?? null;
+}
+
+/**
+ * Remember a kid's address for next time (trimmed). No-op on an empty name or
+ * address. Emits a same-tab change event so open pickers refresh.
+ */
+export function setKidAddress(kidName: string, address: string): void {
+  const name = kidName.trim();
+  const addr = address.trim();
+  if (!name || !addr) return;
+  try {
+    const next = { ...loadKidAddresses(), [name]: addr };
+    localStorage.setItem(KID_ADDRESSES_STORAGE_KEY, JSON.stringify(next));
+    if (typeof window !== "undefined")
+      window.dispatchEvent(new Event(KID_ADDRESSES_EVENT));
+  } catch {
+    /* ignore */
+  }
 }
 
 /**

@@ -67,7 +67,14 @@ interface Suggestion {
   icon: Icon;
   tint: IconTileTint;
   defaultOn?: boolean;
+  /** Optional context ("how it's done, who's involved"), for custom chores. */
+  note?: string;
 }
+
+// Copy caps (mirror the family add-chore dialog).
+const TITLE_MAX = 28;
+const TITLE_COUNTER_AT = 20;
+const NOTE_MAX = 90;
 
 const SUGGESTIONS: Suggestion[] = [
   { key: "bed", name: "Make the bed", emoji: "🛏️", rewardXlm: 0.5, icon: BedIcon, tint: "sky", defaultOn: true },
@@ -145,6 +152,7 @@ function SetupPage() {
         name: c.name,
         emoji: c.emoji, // kept so it rides the invite link to kid devices
         rewardXlm: c.rewardXlm,
+        ...(c.note?.trim() ? { note: c.note.trim() } : {}),
       }));
     createFamily({
       name: familyName.trim(),
@@ -436,6 +444,14 @@ function AddCustomChore({ onAdd }: { onAdd: (c: Suggestion) => void }) {
   const [name, setName] = useState("");
   const [emoji, setEmoji] = useState(CUSTOM_EMOJI[0]);
   const [reward, setReward] = useState(0.5);
+  const [note, setNote] = useState("");
+
+  const reset = () => {
+    setName("");
+    setEmoji(CUSTOM_EMOJI[0]);
+    setReward(0.5);
+    setNote("");
+  };
 
   const submit = () => {
     if (!name.trim()) {
@@ -449,16 +465,23 @@ function AddCustomChore({ onAdd }: { onAdd: (c: Suggestion) => void }) {
       rewardXlm: reward,
       icon: SparkleIcon,
       tint: "gold",
+      note: note.trim() || undefined,
     });
-    setName("");
-    setEmoji(CUSTOM_EMOJI[0]);
-    setReward(0.5);
+    reset();
     setOpen(false);
     toast.success("Chore added");
   };
 
+  const overCounter = name.length >= TITLE_COUNTER_AT;
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (!o) reset();
+      }}
+    >
       <button
         type="button"
         onClick={() => setOpen(true)}
@@ -476,11 +499,36 @@ function AddCustomChore({ onAdd }: { onAdd: (c: Suggestion) => void }) {
         </DialogHeader>
         <div className="space-y-4">
           <div>
-            <Label className="mb-2">Chore name</Label>
+            <div className="mb-2 flex items-center justify-between">
+              <Label>Chore name</Label>
+              {overCounter && (
+                <span
+                  className={cn(
+                    "text-[11px] font-extrabold tabular-nums",
+                    name.length >= TITLE_MAX
+                      ? "text-m-pink"
+                      : "text-muted-foreground",
+                  )}
+                >
+                  {name.length}/{TITLE_MAX}
+                </span>
+              )}
+            </div>
             <Input
               placeholder="e.g. Feed the cat"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              maxLength={TITLE_MAX}
+              onChange={(e) => setName(e.target.value.slice(0, TITLE_MAX))}
+              onKeyDown={(e) => e.key === "Enter" && submit()}
+            />
+          </div>
+          <div>
+            <Label className="mb-2">Note</Label>
+            <Input
+              placeholder="Anything they should know? (optional)"
+              value={note}
+              maxLength={NOTE_MAX}
+              onChange={(e) => setNote(e.target.value.slice(0, NOTE_MAX))}
               onKeyDown={(e) => e.key === "Enter" && submit()}
             />
           </div>

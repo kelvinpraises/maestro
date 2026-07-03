@@ -63,7 +63,7 @@ export function friendlyTxError(err: unknown): string {
   if (raw.includes("AA41")) return "Paymaster deposit too low. Contact support.";
   if (raw.includes("AA50") || raw.includes("AA51")) return "Insufficient funds to cover transaction fees.";
   if (raw.includes("insufficient funds")) return "Insufficient funds.";
-  if (raw.includes("fetch failed") || raw.includes("Failed to fetch")) return "Network error — check your connection and try again.";
+  if (raw.includes("fetch failed") || raw.includes("Failed to fetch")) return "Network error. Check your connection and try again.";
   if (raw.includes("0xacfdb444") || raw.includes("ExecutionFailed")) return "Transaction failed during simulation. Please try again.";
   if (raw.includes("User rejected") || raw.includes("user rejected")) return "Transaction was cancelled.";
   return "Something went wrong. Please try again.";

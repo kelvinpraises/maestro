@@ -53,7 +53,7 @@ function WelcomePage() {
                   Maestro
                 </h1>
                 <p className="mx-auto mt-3 max-w-[17rem] text-[15px] font-bold text-muted-foreground text-pretty">
-                  Chores your kids actually want to do — with a real stash they
+                  Chores your kids actually want to do, with a real stash they
                   keep.
                 </p>
               </div>
@@ -100,7 +100,7 @@ function WelcomePage() {
                 Got a family link?
               </h1>
               <p className="mx-auto mt-3 max-w-xs text-[15px] font-bold text-muted-foreground text-pretty">
-                Ask your grown-up to send you the family link — it opens right
+                Ask your grown-up to send you the family link. It opens right
                 here and pops you straight onto the team.
               </p>
             </div>
@@ -110,7 +110,7 @@ function WelcomePage() {
               <ol className="mt-2 space-y-1.5 text-[13.5px] font-bold text-foreground/80">
                 <li>1. Your grown-up taps &quot;Invite&quot; on their phone.</li>
                 <li>2. They send you the link (texts, chats, anywhere).</li>
-                <li>3. You tap it — balloons, and you&apos;re on the team!</li>
+                <li>3. You tap it. Balloons, and you&apos;re on the team!</li>
               </ol>
             </div>
 

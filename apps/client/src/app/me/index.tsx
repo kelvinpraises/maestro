@@ -252,7 +252,7 @@ function GrownupsPanel({
           {/* The one privacy sentence. */}
           <p className="flex items-center justify-center gap-1.5 pt-1 text-center text-[12px] font-semibold text-muted-foreground/80">
             <LockIcon className="size-3.5 shrink-0" weight="fill" />
-            Rewards are private — only your family knows.
+            Rewards are private. Only your family knows.
           </p>
           </div>
         </div>

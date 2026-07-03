@@ -97,7 +97,7 @@ function JoinFamilyPage() {
                 You're in! 🎉
               </h1>
               <p className="mt-2 max-w-xs text-[15px] font-bold text-muted-foreground text-pretty">
-                Welcome to {invite.familyName}. Your chores are ready — go earn!
+                Welcome to {invite.familyName}. Your chores are ready. Go earn!
               </p>
             </div>
             <Button
@@ -124,7 +124,7 @@ function JoinFamilyPage() {
                 {invite.kidName ? (
                   <>
                     Hey{" "}
-                    <span className="text-foreground">{invite.kidName}</span> — you
+                    <span className="text-foreground">{invite.kidName}</span>, you
                     made it!
                   </>
                 ) : (

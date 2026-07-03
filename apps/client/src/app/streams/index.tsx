@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   SparkleIcon,
   PlusIcon,
@@ -8,9 +8,18 @@ import {
   PiggyBankIcon,
   SpinnerGapIcon,
   DownloadSimpleIcon,
+  UserIcon,
+  ClipboardIcon,
+  DropIcon,
 } from "@phosphor-icons/react";
 import { cn } from "@/utils";
 import { useStellarWallet } from "@/providers/stellar-wallet-provider";
+import { useFamily } from "@/hooks/use-family";
+import {
+  getKidAddress,
+  setKidAddress,
+  KID_ADDRESSES_EVENT,
+} from "@/lib/family";
 import {
   useAllowanceState,
   useCreateAllowance,
@@ -27,13 +36,70 @@ const PERIODS: { id: AllowancePeriod; label: string }[] = [
   { id: "week", label: "per week" },
 ];
 
+/**
+ * Who an allowance drips to. `kind: "myself"` streams to the parent's own
+ * wallet (the single-wallet demo default); `kind: "kid"` resolves the named
+ * kid's G-address from the local kid-addresses map; `kind: "address"` is a raw
+ * pasted address. `resolvedAddress` is what actually gets wired to the mutation
+ * (null when a kid has no known address yet — the paste field opens for them).
+ */
+type Recipient =
+  | { kind: "myself" }
+  | { kind: "kid"; name: string }
+  | { kind: "address" };
+
 function AllowancePage() {
   const { publicKey } = useStellarWallet();
+  const { family } = useFamily();
+  const kidNames = family?.kidNames ?? [];
 
   // ── create form state ──────────────────────────────────────────────────────
   const [rate, setRate] = useState(2);
   const [period, setPeriod] = useState<AllowancePeriod>("week");
   const [fundXlm, setFundXlm] = useState(10);
+
+  // ── recipient picker (item 5) ───────────────────────────────────────────────
+  const [recipient, setRecipient] = useState<Recipient>({ kind: "myself" });
+  const [pasteAddr, setPasteAddr] = useState("");
+  // Bump to re-read the kid-addresses map after a save (same-tab event).
+  const [addrTick, setAddrTick] = useState(0);
+  useEffect(() => {
+    const bump = () => setAddrTick((t) => t + 1);
+    window.addEventListener(KID_ADDRESSES_EVENT, bump);
+    window.addEventListener("storage", bump);
+    return () => {
+      window.removeEventListener(KID_ADDRESSES_EVENT, bump);
+      window.removeEventListener("storage", bump);
+    };
+  }, []);
+
+  // The address a kid chip resolves to (null when we've never been told it).
+  const knownKidAddress = useMemo(() => {
+    void addrTick; // re-run after a save
+    return recipient.kind === "kid" ? getKidAddress(recipient.name) : null;
+  }, [recipient, addrTick]);
+
+  // When the paste field is needed: a raw "Paste address" pick, or a kid chip
+  // whose address we don't know yet.
+  const needsPaste =
+    recipient.kind === "address" ||
+    (recipient.kind === "kid" && !knownKidAddress);
+
+  // The concrete address wired to the create mutation, or null if unresolved.
+  const resolvedAddress = useMemo<string | null>(() => {
+    const pasted = pasteAddr.trim() || null;
+    if (recipient.kind === "myself") return publicKey;
+    if (recipient.kind === "kid") return knownKidAddress ?? pasted;
+    return pasted; // "address"
+  }, [recipient, knownKidAddress, pasteAddr, publicKey]);
+
+  // A friendly label for the live-state card ("Dripping to Zuri").
+  const recipientLabel =
+    recipient.kind === "myself"
+      ? "you"
+      : recipient.kind === "kid"
+        ? recipient.name
+        : "a pasted address";
 
   const create = useCreateAllowance();
   const collect = useCollectAllowance();
@@ -67,10 +133,19 @@ function AllowancePage() {
       <header>
         <h1 className="font-display text-3xl font-extrabold tracking-tight">Allowance</h1>
         <p className="mt-1 text-[15px] font-bold text-muted-foreground text-pretty">
-          A steady drip into your kid&apos;s stash — it flows every few seconds.
+          A steady drip into your kid&apos;s stash, flowing every few seconds.
           Set the pace, fund it, and it pours in on its own.
         </p>
       </header>
+
+      {/* Who it's dripping to (item 5). */}
+      <div className="flex items-center gap-2 card-pop card-pop-sm bg-card/70 px-3.5 py-2.5">
+        <DropIcon className="size-4 shrink-0 text-m-green-ink" weight="duotone" />
+        <p className="min-w-0 flex-1 truncate text-[13px] font-extrabold text-foreground">
+          Dripping to{" "}
+          <span className="text-m-green-ink">{recipientLabel}</span>
+        </p>
+      </div>
 
       {/* ── Live allowance state ──────────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-2.5">
@@ -133,6 +208,83 @@ function AllowancePage() {
           Start an allowance
         </h2>
 
+        {/* Recipient picker: kid chips + Myself + Paste address (item 5). */}
+        <div>
+          <p className="text-microlabel mb-1.5 text-muted-foreground">Drips to</p>
+          <div className="flex flex-wrap gap-2">
+            {kidNames.map((k) => {
+              const on = recipient.kind === "kid" && recipient.name === k;
+              return (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => {
+                    setRecipient({ kind: "kid", name: k });
+                    setPasteAddr("");
+                  }}
+                  className={cn(
+                    "press-pop flex items-center gap-1.5 rounded-full border-2 border-m-ink px-3 py-2 font-display text-xs font-extrabold shadow-[var(--m-pop-sm)]",
+                    on ? "bg-primary text-primary-foreground" : "bg-card text-foreground",
+                  )}
+                >
+                  <span className="flex size-5 items-center justify-center rounded-full border-2 border-m-ink bg-m-sky text-[10px] font-extrabold text-m-blue">
+                    {k.charAt(0).toUpperCase()}
+                  </span>
+                  {k}
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              onClick={() => {
+                setRecipient({ kind: "myself" });
+                setPasteAddr("");
+              }}
+              className={cn(
+                "press-pop flex items-center gap-1.5 rounded-full border-2 border-m-ink px-3 py-2 font-display text-xs font-extrabold shadow-[var(--m-pop-sm)]",
+                recipient.kind === "myself"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-card text-foreground",
+              )}
+            >
+              <UserIcon className="size-3.5" weight="bold" />
+              Myself
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setRecipient({ kind: "address" });
+                setPasteAddr("");
+              }}
+              className={cn(
+                "press-pop flex items-center gap-1.5 rounded-full border-2 border-m-ink px-3 py-2 font-display text-xs font-extrabold shadow-[var(--m-pop-sm)]",
+                recipient.kind === "address"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-card text-foreground",
+              )}
+            >
+              <ClipboardIcon className="size-3.5" weight="bold" />
+              Paste address
+            </button>
+          </div>
+
+          {/* Paste field: opens for a raw address pick, or a kid with no known
+              address (labelled for that kid; saved to the map on start). */}
+          {needsPaste && (
+            <input
+              type="text"
+              value={pasteAddr}
+              onChange={(e) => setPasteAddr(e.target.value.trim())}
+              placeholder={
+                recipient.kind === "kid"
+                  ? `Paste ${recipient.name}'s address (G…)`
+                  : "Paste an address (G…)"
+              }
+              className="field-pop mt-2.5 w-full px-3.5 py-3 font-mono text-[13px] font-bold placeholder:font-display placeholder:font-bold placeholder:text-muted-foreground/70 focus:outline-none focus-visible:ring-[3px] focus-visible:ring-m-blue/50"
+            />
+          )}
+        </div>
+
         {/* Rate stepper */}
         <div className="field-pop flex items-center justify-between px-3.5 py-3">
           <div>
@@ -186,10 +338,17 @@ function AllowancePage() {
 
         <button
           type="button"
-          disabled={create.isPending || fundXlm <= 0 || rate <= 0}
-          onClick={() =>
-            create.mutate({ rate, period, fundXlm, recipient: publicKey })
+          disabled={
+            create.isPending || fundXlm <= 0 || rate <= 0 || !resolvedAddress
           }
+          onClick={() => {
+            if (!resolvedAddress) return;
+            // Remember a freshly-pasted kid address for next time (item 5).
+            if (recipient.kind === "kid" && !knownKidAddress) {
+              setKidAddress(recipient.name, resolvedAddress);
+            }
+            create.mutate({ rate, period, fundXlm, recipient: resolvedAddress });
+          }}
           className="press-pop flex h-13 w-full items-center justify-center gap-2 rounded-full border-2 border-m-ink bg-m-blue py-3.5 font-display text-base font-extrabold text-white shadow-[var(--m-pop)] hover:brightness-105 disabled:opacity-50"
         >
           {create.isPending ? (
@@ -206,7 +365,7 @@ function AllowancePage() {
         </button>
         {create.isSuccess && (
           <p className="text-center text-[13px] font-extrabold text-m-green-ink">
-            Allowance is live — money starts flowing in a few seconds! ✨
+            Allowance is live. Money starts flowing in a few seconds! ✨
           </p>
         )}
         {create.isError && (

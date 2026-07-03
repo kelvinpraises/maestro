@@ -1,14 +1,14 @@
 // /family — "ours". The family tab (DESIGN-STORY §5).
 //
 // This replaces the old "/circles" screen AND folds the treasury history feed
-// (was its own "/history" tab) into a "Family treasury" section, so there's no
-// orphan tab. Everything is localStorage + links + chain — no API server.
+// (was its own "/history" tab) into an "Activity" group, so there's no orphan
+// tab. Everything is localStorage + links + chain — no API server.
 //
 //   • A device with NO family sees a friendly setup card (create → parent).
-//   • PARENT view: manage chores, add kid names, produce INVITE LINKS and private
-//     CLAIM LINKS (send-a-reward) — PLUS the family treasury feed at the bottom.
+//   • PARENT view: an in-page segmented switcher (Chores / Kids / Activity), one
+//     group at a time, calm on entry. Send-a-reward is smushed into each Kid row.
 //   • KID view: a read-only team card (family name + who's in it) and the same
-//     treasury feed ("what our family's been up to"). No chore management.
+//     treasury feed, capped with a quiet "show all" expander.
 
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useCallback, useMemo } from "react";
@@ -28,6 +28,7 @@ import {
   LockIcon,
   BankIcon,
   WifiSlashIcon,
+  ListChecksIcon,
 } from "@phosphor-icons/react";
 import { EmojiTile, IconTile } from "@/components/atoms/icon-tile";
 import { toast } from "sonner";
@@ -54,11 +55,31 @@ import {
 import { formatRelativeTime, truncateAddress } from "@/utils";
 import { buildInviteLink, buildClaimLink, type Chore } from "@/lib/family";
 
+// The three parent groups. `?g=kids` deep-links straight to the Kids group so
+// the home screen's kid chips can land here (dead-affordance fix, item 4).
+type Group = "chores" | "kids" | "activity";
+const GROUPS: { id: Group; label: string }[] = [
+  { id: "chores", label: "Chores" },
+  { id: "kids", label: "Kids" },
+  { id: "activity", label: "Activity" },
+];
+function isGroup(v: unknown): v is Group {
+  return v === "chores" || v === "kids" || v === "activity";
+}
+
 export const Route = createFileRoute("/family/")({
+  validateSearch: (search: Record<string, unknown>): { g?: Group } => {
+    return isGroup(search.g) ? { g: search.g } : {};
+  },
   component: FamilyPage,
 });
 
 const EMOJI_CHOICES = ["🛏️", "🗑️", "🍽️", "🐕", "🧹", "📚", "🌱", "🧺", "🧼", "🚿"];
+
+// Copy caps (item 4): a short, scannable title; a one-line optional note.
+const TITLE_MAX = 28;
+const TITLE_COUNTER_AT = 20;
+const NOTE_MAX = 90;
 
 function FamilyPage() {
   const { family, role, addChore, removeChore, addKidName } = useFamily();
@@ -93,8 +114,6 @@ function FamilyPage() {
 }
 
 // ── no-family card: a device with no family → send to the /setup flow ────────
-// Family creation now lives in the warm, single-screen-at-a-time /setup flow
-// (name → kids → starter chores). This card is just the doorway to it.
 
 function NoFamilyCard() {
   const navigate = useNavigate();
@@ -108,7 +127,7 @@ function NoFamilyCard() {
           Start your family
         </h1>
         <p className="mt-2 max-w-xs text-[15px] font-bold text-muted-foreground text-pretty">
-          Name your family, add your kids, and pick a few starter chores — it
+          Name your family, add your kids, and pick a few starter chores. It
           takes about two minutes.
         </p>
       </div>
@@ -125,6 +144,46 @@ function NoFamilyCard() {
   );
 }
 
+// ── the segmented pill switcher (in-page, NOT router tabs) ────────────────────
+// Ink-bordered pill track, active pill green, press-pop on every pill.
+
+function GroupSwitcher({
+  group,
+  onChange,
+}: {
+  group: Group;
+  onChange: (g: Group) => void;
+}) {
+  return (
+    <div
+      role="tablist"
+      aria-label="Family sections"
+      className="flex gap-1 rounded-full border-2 border-m-ink bg-card p-1 shadow-[var(--m-pop-sm)]"
+    >
+      {GROUPS.map((g) => {
+        const active = g.id === group;
+        return (
+          <button
+            key={g.id}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(g.id)}
+            className={cn(
+              "press-pop flex-1 rounded-full py-2 font-display text-sm font-extrabold transition-colors",
+              active
+                ? "border-2 border-m-ink bg-primary text-primary-foreground shadow-[var(--m-pop-sm)]"
+                : "border-2 border-transparent text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {g.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── parent view ──────────────────────────────────────────────────────────────
 
 function ParentView({
@@ -133,18 +192,145 @@ function ParentView({
   removeChore,
   addKidName,
 }: {
-  family: ReturnType<typeof useFamily>["family"] & object;
+  family: NonNullable<ReturnType<typeof useFamily>["family"]>;
   addChore: ReturnType<typeof useFamily>["addChore"];
   removeChore: ReturnType<typeof useFamily>["removeChore"];
   addKidName: ReturnType<typeof useFamily>["addKidName"];
 }) {
+  const navigate = useNavigate();
+  // The switcher reads/writes the `?g=` search param, so /family?g=kids deep
+  // links (from the home kid chips) land on the right group.
+  const search = Route.useSearch();
+  const group: Group = search.g ?? "chores";
+  const setGroup = (g: Group) =>
+    navigate({ to: "/family", search: g === "chores" ? {} : { g }, replace: true });
+
   return (
-    <>
-      <ChoresSection family={family} addChore={addChore} removeChore={removeChore} />
-      <KidsSection family={family} addKidName={addKidName} />
-      <RewardSection family={family} />
-      <TreasurySection />
-    </>
+    <div className="space-y-4">
+      <GroupSwitcher group={group} onChange={setGroup} />
+
+      {/* Keyed remount so the 240ms entrance replays on every group swap (the
+          `both` fill on animate-pop-in would otherwise leave it stuck). */}
+      <div key={group} className="animate-pop-in">
+        {group === "chores" && (
+          <ChoresSection
+            family={family}
+            addChore={addChore}
+            removeChore={removeChore}
+          />
+        )}
+        {group === "kids" && (
+          <KidsSection family={family} addKidName={addKidName} />
+        )}
+        {group === "activity" && <TreasurySection />}
+      </div>
+    </div>
+  );
+}
+
+// ── the add/edit-chore dialog body (shared shape; title cap + optional note) ──
+
+function ChoreDialogFields({
+  name,
+  setName,
+  emoji,
+  setEmoji,
+  reward,
+  setReward,
+  note,
+  setNote,
+  onSubmit,
+}: {
+  name: string;
+  setName: (v: string) => void;
+  emoji: string;
+  setEmoji: (v: string) => void;
+  reward: number;
+  setReward: (fn: (v: number) => number) => void;
+  note: string;
+  setNote: (v: string) => void;
+  onSubmit: () => void;
+}) {
+  const overCounter = name.length >= TITLE_COUNTER_AT;
+  return (
+    <div className="space-y-4">
+      <div>
+        <div className="mb-2 flex items-center justify-between">
+          <Label>Chore name</Label>
+          {overCounter && (
+            <span
+              className={cn(
+                "text-[11px] font-extrabold tabular-nums",
+                name.length >= TITLE_MAX ? "text-m-pink" : "text-muted-foreground",
+              )}
+            >
+              {name.length}/{TITLE_MAX}
+            </span>
+          )}
+        </div>
+        <Input
+          placeholder="e.g. Make the bed"
+          value={name}
+          maxLength={TITLE_MAX}
+          onChange={(e) => setName(e.target.value.slice(0, TITLE_MAX))}
+          onKeyDown={(e) => e.key === "Enter" && onSubmit()}
+        />
+      </div>
+      <div>
+        <Label className="mb-2">Emoji</Label>
+        <div className="flex flex-wrap gap-1.5">
+          {EMOJI_CHOICES.map((e) => (
+            <button
+              key={e}
+              type="button"
+              onClick={() => setEmoji(e)}
+              className={cn(
+                "press-pop flex size-10 items-center justify-center rounded-[12px] border-2 text-xl",
+                emoji === e
+                  ? "border-m-ink bg-primary/20 shadow-[var(--m-pop-sm)]"
+                  : "border-transparent bg-muted",
+              )}
+            >
+              <span aria-hidden>{e}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+      <div>
+        <Label className="mb-2">Note</Label>
+        <Input
+          placeholder="Anything they should know? (optional)"
+          value={note}
+          maxLength={NOTE_MAX}
+          onChange={(e) => setNote(e.target.value.slice(0, NOTE_MAX))}
+          onKeyDown={(e) => e.key === "Enter" && onSubmit()}
+        />
+      </div>
+      <div>
+        <Label className="mb-2">Reward (XLM)</Label>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() =>
+              setReward((v) => Math.max(0.1, Math.round((v - 0.5) * 100) / 100))
+            }
+            className="press-pop flex size-10 items-center justify-center rounded-full border-2 border-m-ink bg-muted font-display text-lg font-extrabold shadow-[var(--m-pop-sm)]"
+          >
+            −
+          </button>
+          <span className="flex-1 text-center text-money text-xl text-m-green-ink">
+            {reward.toFixed(2)}
+          </span>
+          <button
+            type="button"
+            onClick={() => setReward((v) => Math.round((v + 0.5) * 100) / 100)}
+            className="press-pop flex size-10 items-center justify-center rounded-full border-2 border-m-ink bg-primary text-primary-foreground font-display text-lg font-extrabold shadow-[var(--m-pop-sm)]"
+          >
+            +
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -161,16 +347,27 @@ function ChoresSection({
   const [name, setName] = useState("");
   const [emoji, setEmoji] = useState(EMOJI_CHOICES[0]);
   const [reward, setReward] = useState(1);
+  const [note, setNote] = useState("");
+
+  const reset = () => {
+    setName("");
+    setEmoji(EMOJI_CHOICES[0]);
+    setReward(1);
+    setNote("");
+  };
 
   const handleAdd = () => {
     if (!name.trim()) {
       toast.error("Name the chore first");
       return;
     }
-    addChore({ name: name.trim(), emoji, rewardXlm: reward });
-    setName("");
-    setEmoji(EMOJI_CHOICES[0]);
-    setReward(1);
+    addChore({
+      name: name.trim(),
+      emoji,
+      rewardXlm: reward,
+      note: note.trim() || undefined,
+    });
+    reset();
     setOpen(false);
     toast.success("Chore added");
   };
@@ -182,7 +379,13 @@ function ChoresSection({
           <SparkleIcon className="size-4 text-m-gold" weight="fill" />
           Chores
         </h2>
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog
+          open={open}
+          onOpenChange={(o) => {
+            setOpen(o);
+            if (!o) reset();
+          }}
+        >
           <DialogTrigger asChild>
             <button className="press-pop flex size-9 shrink-0 items-center justify-center rounded-2xl border-2 border-m-ink bg-primary text-primary-foreground shadow-[var(--m-pop-sm)]">
               <PlusIcon className="size-4" weight="bold" />
@@ -195,63 +398,17 @@ function ChoresSection({
                 Give it a name, pick an emoji, and set the reward.
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label className="mb-2">Chore name</Label>
-                <Input
-                  placeholder="e.g. Make the bed"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-                />
-              </div>
-              <div>
-                <Label className="mb-2">Emoji</Label>
-                <div className="flex flex-wrap gap-1.5">
-                  {EMOJI_CHOICES.map((e) => (
-                    <button
-                      key={e}
-                      type="button"
-                      onClick={() => setEmoji(e)}
-                      className={cn(
-                        "press-pop flex size-10 items-center justify-center rounded-[12px] border-2 text-xl",
-                        emoji === e
-                          ? "border-m-ink bg-primary/20 shadow-[var(--m-pop-sm)]"
-                          : "border-transparent bg-muted",
-                      )}
-                    >
-                      <span aria-hidden>{e}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <Label className="mb-2">Reward (XLM)</Label>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setReward((v) => Math.max(0.1, Math.round((v - 0.5) * 100) / 100))
-                    }
-                    className="press-pop flex size-10 items-center justify-center rounded-full border-2 border-m-ink bg-muted font-display text-lg font-extrabold shadow-[var(--m-pop-sm)]"
-                  >
-                    −
-                  </button>
-                  <span className="flex-1 text-center text-money text-xl text-m-green-ink">
-                    {reward.toFixed(2)}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setReward((v) => Math.round((v + 0.5) * 100) / 100)
-                    }
-                    className="press-pop flex size-10 items-center justify-center rounded-full border-2 border-m-ink bg-primary text-primary-foreground font-display text-lg font-extrabold shadow-[var(--m-pop-sm)]"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-            </div>
+            <ChoreDialogFields
+              name={name}
+              setName={setName}
+              emoji={emoji}
+              setEmoji={setEmoji}
+              reward={reward}
+              setReward={setReward}
+              note={note}
+              setNote={setNote}
+              onSubmit={handleAdd}
+            />
             <DialogFooter>
               <Button variant="outline" onClick={() => setOpen(false)}>
                 Cancel
@@ -276,15 +433,17 @@ function ChoresSection({
       ) : (
         <div className="space-y-2.5">
           {family.chores.map((c) => (
-            <div
-              key={c.id}
-              className="flex items-center gap-3 card-pop p-3"
-            >
+            <div key={c.id} className="flex items-center gap-3 card-pop p-3">
               <EmojiTile emoji={c.emoji} tint="neutral" bordered />
               <div className="min-w-0 flex-1">
                 <p className="truncate font-display text-[15px] font-extrabold">
                   {c.name}
                 </p>
+                {c.note && (
+                  <p className="truncate text-[12px] font-semibold text-muted-foreground">
+                    {c.note}
+                  </p>
+                )}
                 <p className="text-[13px] font-extrabold tabular-nums text-m-green-ink">
                   {c.rewardXlm.toFixed(2)} XLM
                 </p>
@@ -305,6 +464,8 @@ function ChoresSection({
   );
 }
 
+// ── kids: each row carries invite + a compact "Send a reward" action ─────────
+
 function KidsSection({
   family,
   addKidName,
@@ -314,6 +475,7 @@ function KidsSection({
 }) {
   const { publicKey } = useStellarWallet();
   const [inviteFor, setInviteFor] = useState<string | null>(null);
+  const [rewardFor, setRewardFor] = useState<string | null>(null);
   const [newKid, setNewKid] = useState("");
   const [copied, setCopied] = useState(false);
 
@@ -359,27 +521,36 @@ function KidsSection({
 
       <div className="space-y-2.5">
         {family.kidNames.map((k) => (
-          <div
-            key={k}
-            className="flex items-center gap-3 card-pop p-3"
-          >
-            <span className="flex size-11 items-center justify-center rounded-[13px] border-2 border-m-ink bg-m-sky font-display text-lg font-extrabold text-m-blue shadow-[var(--m-pop-sm)]">
-              {k.charAt(0).toUpperCase()}
-            </span>
-            <p className="min-w-0 flex-1 truncate font-display text-[15px] font-extrabold">
-              {k}
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                setInviteFor(k);
-                setCopied(false);
-              }}
-              className="press-pop flex items-center gap-1.5 rounded-full border-2 border-m-ink bg-primary/20 px-3 py-1.5 text-xs font-extrabold text-m-green-ink"
-            >
-              <LinkIcon className="size-3.5" weight="bold" />
-              Invite
-            </button>
+          <div key={k} className="card-pop p-3">
+            <div className="flex items-center gap-3">
+              <span className="flex size-11 items-center justify-center rounded-[13px] border-2 border-m-ink bg-m-sky font-display text-lg font-extrabold text-m-blue shadow-[var(--m-pop-sm)]">
+                {k.charAt(0).toUpperCase()}
+              </span>
+              <p className="min-w-0 flex-1 truncate font-display text-[15px] font-extrabold">
+                {k}
+              </p>
+            </div>
+            <div className="mt-2.5 flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setInviteFor(k);
+                  setCopied(false);
+                }}
+                className="press-pop flex flex-1 items-center justify-center gap-1.5 rounded-full border-2 border-m-ink bg-card px-3 py-2 text-xs font-extrabold text-foreground shadow-[var(--m-pop-sm)]"
+              >
+                <LinkIcon className="size-3.5" weight="bold" />
+                Invite
+              </button>
+              <button
+                type="button"
+                onClick={() => setRewardFor(k)}
+                className="press-pop flex flex-1 items-center justify-center gap-1.5 rounded-full border-2 border-m-ink bg-primary/20 px-3 py-2 text-xs font-extrabold text-m-green-ink shadow-[var(--m-pop-sm)]"
+              >
+                <GiftIcon className="size-3.5" weight="duotone" />
+                Send a reward
+              </button>
+            </div>
           </div>
         ))}
 
@@ -419,7 +590,7 @@ function KidsSection({
             <DialogTitle>Invite {inviteFor}</DialogTitle>
             <DialogDescription>
               Send this link to {inviteFor}&apos;s device. It carries your family
-              and chores — no accounts needed.
+              and chores, no accounts needed.
             </DialogDescription>
           </DialogHeader>
           <button
@@ -451,21 +622,41 @@ function KidsSection({
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Send-a-reward flow, prefilled for the chosen kid (smushed in, item 3). */}
+      <SendRewardDialog
+        family={family}
+        kidName={rewardFor}
+        onClose={() => setRewardFor(null)}
+      />
     </section>
   );
 }
 
-// ── reward → claim link (parent) ─────────────────────────────────────────────
+// ── send-a-reward → claim link, prefilled for a specific kid ─────────────────
+// Was a free-standing section; now opened per kid row. Same fund+claim-link
+// flow, just scoped to whichever kid the parent tapped.
 
-function RewardSection({
+function SendRewardDialog({
   family,
+  kidName,
+  onClose,
 }: {
   family: NonNullable<ReturnType<typeof useFamily>["family"]>;
+  kidName: string | null;
+  onClose: () => void;
 }) {
   const fund = useFundReward();
   const [chore, setChore] = useState<Chore | null>(null);
   const [claimLink, setClaimLink] = useState("");
   const [copied, setCopied] = useState(false);
+
+  const close = () => {
+    setChore(null);
+    setClaimLink("");
+    setCopied(false);
+    onClose();
+  };
 
   const handleFund = (c: Chore) => {
     setChore(c);
@@ -476,7 +667,7 @@ function RewardSection({
       {
         onSuccess: ({ note }) => {
           setClaimLink(buildClaimLink(note));
-          toast.success("Reward funded — share the claim link!");
+          toast.success("Reward funded. Share the claim link!");
         },
         onError: (e) => toast.error(e.message),
       },
@@ -504,98 +695,102 @@ function RewardSection({
   };
 
   return (
-    <section className="space-y-3">
-      <div className="flex items-center justify-between px-1">
-        <h2 className="flex items-center gap-1.5 font-display text-lg font-extrabold">
-          <GiftIcon className="size-4 text-m-purple" weight="duotone" />
-          Send a reward
-        </h2>
-      </div>
-
-      {family.chores.length === 0 ? (
-        <p className="px-1 text-[13px] font-bold text-muted-foreground text-pretty">
-          Add a chore above, then reward it here with a private claim link.
-        </p>
-      ) : (
-        <div className="space-y-2.5">
-          {family.chores.map((c) => (
+    <Dialog open={!!kidName} onOpenChange={(o) => !o && close()}>
+      <DialogContent>
+        {claimLink ? (
+          // ── reward funded: hand off the claim link ──────────────────────────
+          <>
+            <DialogHeader>
+              <DialogTitle>Reward ready! 🎁</DialogTitle>
+              <DialogDescription>
+                Send this link to {kidName}. Opening it lets them import and
+                privately claim {chore?.rewardXlm.toFixed(2)} XLM.
+              </DialogDescription>
+            </DialogHeader>
             <button
-              key={c.id}
-              type="button"
-              disabled={fund.isPending}
-              onClick={() => handleFund(c)}
-              className="press-pop card-pop flex w-full items-center gap-3 p-3 text-left disabled:opacity-60"
+              onClick={handleCopy}
+              className="press-pop w-full rounded-2xl border-2 border-m-ink bg-muted/40 px-4 py-3.5 text-left"
             >
-              <EmojiTile emoji={c.emoji} tint="purple" bordered />
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-display text-[15px] font-extrabold">
-                  {c.name}
-                </p>
-                <p className="text-[13px] font-extrabold tabular-nums text-m-green-ink">
-                  {c.rewardXlm.toFixed(2)} XLM
-                </p>
-              </div>
-              {fund.isPending && chore?.id === c.id ? (
-                <SpinnerGapIcon className="size-5 animate-spin text-m-purple" weight="bold" />
-              ) : (
-                <span className="flex items-center gap-1.5 rounded-full border-2 border-m-ink bg-m-purple/15 px-3 py-1.5 text-xs font-extrabold text-m-purple">
-                  <GiftIcon className="size-3.5" weight="duotone" />
-                  Reward
-                </span>
-              )}
+              <p className="break-all font-mono text-xs leading-relaxed text-muted-foreground">
+                {claimLink}
+              </p>
+              <span className="mt-2.5 flex items-center gap-1.5 text-xs font-bold">
+                {copied ? (
+                  <span className="flex items-center gap-1.5 text-m-green-ink">
+                    <CheckCircleIcon className="size-3.5" weight="fill" />
+                    Copied!
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1.5 text-muted-foreground">
+                    <CopyIcon className="size-3.5" weight="bold" />
+                    Tap to copy
+                  </span>
+                )}
+              </span>
             </button>
-          ))}
-        </div>
-      )}
-
-      {/* Claim-link dialog after a successful fund */}
-      <Dialog
-        open={!!claimLink}
-        onOpenChange={(o) => !o && setClaimLink("")}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Reward ready! 🎁</DialogTitle>
-            <DialogDescription>
-              Send this link to {chore?.name ? `"${chore.name}"` : "your kid"}.
-              Opening it lets them import and privately claim{" "}
-              {chore?.rewardXlm.toFixed(2)} XLM.
-            </DialogDescription>
-          </DialogHeader>
-          <button
-            onClick={handleCopy}
-            className="press-pop w-full rounded-2xl border-2 border-m-ink bg-muted/40 px-4 py-3.5 text-left"
-          >
-            <p className="break-all font-mono text-xs leading-relaxed text-muted-foreground">
-              {claimLink}
+            {typeof navigator !== "undefined" && !!navigator.share && (
+              <Button variant="outline" onClick={handleShare} className="w-full">
+                <ShareNetworkIcon className="mr-2 size-4" weight="bold" />
+                Share
+              </Button>
+            )}
+            <p className="flex items-center justify-center gap-1 text-center text-[11px] font-semibold text-muted-foreground/70">
+              <LockIcon className="size-3" weight="fill" />
+              Only someone with this link can claim the reward.
             </p>
-            <span className="mt-2.5 flex items-center gap-1.5 text-xs font-bold">
-              {copied ? (
-                <span className="flex items-center gap-1.5 text-m-green-ink">
-                  <CheckCircleIcon className="size-3.5" weight="fill" />
-                  Copied!
-                </span>
-              ) : (
-                <span className="flex items-center gap-1.5 text-muted-foreground">
-                  <CopyIcon className="size-3.5" weight="bold" />
-                  Tap to copy
-                </span>
-              )}
-            </span>
-          </button>
-          {typeof navigator !== "undefined" && !!navigator.share && (
-            <Button variant="outline" onClick={handleShare} className="w-full">
-              <ShareNetworkIcon className="mr-2 size-4" weight="bold" />
-              Share
-            </Button>
-          )}
-          <p className="flex items-center justify-center gap-1 text-center text-[11px] font-semibold text-muted-foreground/70">
-            <LockIcon className="size-3" weight="fill" />
-            Only someone with this link can claim the reward.
-          </p>
-        </DialogContent>
-      </Dialog>
-    </section>
+          </>
+        ) : (
+          // ── pick a chore to reward ──────────────────────────────────────────
+          <>
+            <DialogHeader>
+              <DialogTitle>Send {kidName} a reward</DialogTitle>
+              <DialogDescription>
+                Pick a chore to reward. We tuck the XLM away privately and give
+                you a claim link to hand over.
+              </DialogDescription>
+            </DialogHeader>
+            {family.chores.length === 0 ? (
+              <p className="px-1 text-[13px] font-bold text-muted-foreground text-pretty">
+                Add a chore first, then reward it here with a private claim link.
+              </p>
+            ) : (
+              <div className="space-y-2.5">
+                {family.chores.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    disabled={fund.isPending}
+                    onClick={() => handleFund(c)}
+                    className="press-pop card-pop flex w-full items-center gap-3 p-3 text-left disabled:opacity-60"
+                  >
+                    <EmojiTile emoji={c.emoji} tint="purple" bordered />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-display text-[15px] font-extrabold">
+                        {c.name}
+                      </p>
+                      <p className="text-[13px] font-extrabold tabular-nums text-m-green-ink">
+                        {c.rewardXlm.toFixed(2)} XLM
+                      </p>
+                    </div>
+                    {fund.isPending && chore?.id === c.id ? (
+                      <SpinnerGapIcon
+                        className="size-5 animate-spin text-m-purple"
+                        weight="bold"
+                      />
+                    ) : (
+                      <span className="flex items-center gap-1.5 rounded-full border-2 border-m-ink bg-m-purple/15 px-3 py-1.5 text-xs font-extrabold text-m-purple">
+                        <GiftIcon className="size-3.5" weight="duotone" />
+                        Reward
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -661,8 +856,11 @@ function KidView({
 
 // ── Family treasury feed (shared by both roles) ──────────────────────────────
 //
-// The activity feed that used to live on its own "/history" tab. Folded here as
-// a section so there's no orphan tab (DESIGN-STORY §5). Read-only for everyone.
+// The activity feed that used to live on its own "/history" tab. Read-only for
+// everyone. Shows the latest ~6 with a quiet "show all" expander, so the feed
+// never shouts on entry (item 3: calm treatment for both roles).
+
+const FEED_PREVIEW = 6;
 
 function TreasurySection({
   heading = "Family treasury",
@@ -670,6 +868,7 @@ function TreasurySection({
   heading?: string;
 }) {
   const { items, truncated, isLoading } = useTreasuryHistory();
+  const [showAll, setShowAll] = useState(false);
 
   const claimedTotal = useMemo(
     () =>
@@ -678,6 +877,9 @@ function TreasurySection({
         .reduce((sum, i) => sum + i.amountXlm, 0),
     [items],
   );
+
+  const visible = showAll ? items : items.slice(0, FEED_PREVIEW);
+  const hiddenCount = items.length - visible.length;
 
   return (
     <section className="space-y-3">
@@ -730,11 +932,23 @@ function TreasurySection({
           </p>
         </div>
       ) : (
-        <div className="space-y-2.5">
-          {items.map((item) => (
-            <ActivityRow key={item.id} item={item} />
-          ))}
-        </div>
+        <>
+          <div className="space-y-2.5">
+            {visible.map((item) => (
+              <ActivityRow key={item.id} item={item} />
+            ))}
+          </div>
+          {hiddenCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowAll(true)}
+              className="press-pop flex w-full items-center justify-center gap-1.5 rounded-full border-2 border-m-ink/25 bg-card/60 py-2.5 font-display text-[13px] font-extrabold text-muted-foreground hover:text-foreground"
+            >
+              <ListChecksIcon className="size-4" weight="bold" />
+              Show all {items.length}
+            </button>
+          )}
+        </>
       )}
     </section>
   );

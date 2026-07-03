@@ -44,6 +44,29 @@ function RewardsPage() {
   const fund = useFundReward();
   const rewards = useMyRewards();
 
+  // Inline fund notice, owned locally so it can be CLEARED — the mutation's own
+  // isSuccess/isError flags stick until the next mutate() and would otherwise
+  // sit on screen contradicting the current state (the reported stale bug).
+  // Cleared: on a new fund action, after a ~5s auto-dismiss, and on unmount.
+  const [notice, setNotice] = useState<
+    { kind: "success" | "error"; text: string } | null
+  >(null);
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearNotice = () => {
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    noticeTimer.current = null;
+    setNotice(null);
+  };
+  const showNotice = (n: { kind: "success" | "error"; text: string }) => {
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    setNotice(n);
+    noticeTimer.current = setTimeout(() => setNotice(null), 5000);
+  };
+  // Clear on unmount / navigation away.
+  useEffect(() => () => {
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+  }, []);
+
   const adjust = (delta: number) =>
     setAmount((v) => Math.max(0.1, Math.round((v + delta) * 100) / 100));
 
@@ -71,7 +94,7 @@ function RewardsPage() {
         <h1 className="font-display text-3xl font-extrabold tracking-tight">Rewards</h1>
         <p className="mt-1 text-[15px] font-bold text-muted-foreground text-pretty">
           Parents tuck a reward into the family treasury. Kids claim it
-          privately — nobody can tell who earned what.
+          privately, so nobody can tell who earned what.
         </p>
       </header>
 
@@ -130,12 +153,23 @@ function RewardsPage() {
         <button
           type="button"
           disabled={fund.isPending || amount <= 0}
-          onClick={() =>
+          onClick={() => {
+            clearNotice(); // starting a new action clears any prior notice
             fund.mutate(
               { amountXlm: amount, label: label.trim() || undefined },
-              { onSuccess: () => setLabel("") },
-            )
-          }
+              {
+                onSuccess: () => {
+                  setLabel("");
+                  showNotice({
+                    kind: "success",
+                    text: "Reward hidden in the treasury, ready to claim! ✨",
+                  });
+                },
+                onError: (e) =>
+                  showNotice({ kind: "error", text: e.message }),
+              },
+            );
+          }}
           className="press-pop flex h-13 w-full items-center justify-center gap-2 rounded-full border-2 border-m-ink bg-m-purple py-3.5 font-display text-base font-extrabold text-white shadow-[var(--m-pop)] hover:brightness-105 disabled:opacity-50"
         >
           {fund.isPending ? (
@@ -150,15 +184,15 @@ function RewardsPage() {
             </>
           )}
         </button>
-        {fund.isSuccess && (
-          <p className="flex items-center justify-center gap-1.5 text-center text-[13px] font-extrabold text-m-green-ink">
+        {notice?.kind === "success" && (
+          <p className="animate-pop-in flex items-center justify-center gap-1.5 text-center text-[13px] font-extrabold text-m-green-ink">
             <LockIcon className="size-3.5" weight="bold" />
-            Reward hidden in the treasury — ready to claim! ✨
+            {notice.text}
           </p>
         )}
-        {fund.isError && (
-          <p className="text-center text-[13px] font-bold text-m-pink">
-            {fund.error.message}
+        {notice?.kind === "error" && (
+          <p className="animate-pop-in text-center text-[13px] font-bold text-m-pink">
+            {notice.text}
           </p>
         )}
       </section>
@@ -300,7 +334,7 @@ function ClaimableCard({
 
       {claim.isError && (
         <p className="mt-2 text-center text-[12px] font-bold text-m-pink text-pretty">
-          The bank line is busy — your reward is safe, try again in a moment.
+          The bank line is busy. Your reward is safe, try again in a moment.
         </p>
       )}
     </div>

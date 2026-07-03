@@ -13,6 +13,8 @@ interface QuestCardProps {
   icon: Icon;
   /** Emoji shown instead of/alongside an icon for extra playfulness */
   emoji?: string;
+  /** Optional context line under the title (how it's done, who's involved). */
+  note?: string;
   tint?: QuestTint;
   status?: QuestStatus;
   onClick?: () => void;
@@ -41,6 +43,7 @@ export function QuestCard({
   amount,
   icon: Icon,
   emoji,
+  note,
   tint = "blue",
   status = "todo",
   onClick,
@@ -79,6 +82,11 @@ export function QuestCard({
         >
           {title}
         </p>
+        {note && (
+          <p className="truncate text-[12px] font-semibold text-foreground/60">
+            {note}
+          </p>
+        )}
         <span className="mt-0.5 inline-flex items-center gap-1 rounded-full border border-m-ink/25 bg-white/70 px-2 py-0.5 text-[13px] font-extrabold text-m-green-ink tabular-nums">
           +{amount.toFixed(2)} XLM
         </span>

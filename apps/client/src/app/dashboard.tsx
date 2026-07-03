@@ -313,6 +313,13 @@ function KidHome({ chores }: { chores: ChoreRow[] }) {
               your {confirmChore ? confirmChore.rewardXlm.toFixed(2) : ""} XLM.
             </DialogDescription>
           </DialogHeader>
+          {confirmChore?.note && (
+            <div className="rounded-2xl border-2 border-m-ink/15 bg-muted/40 px-3.5 py-2.5 text-center">
+              <p className="text-[13px] font-bold text-foreground text-pretty">
+                {confirmChore.note}
+              </p>
+            </div>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmChore(null)}>
               Not yet
@@ -354,6 +361,11 @@ function ChoreRowKid({
           <p className="truncate font-display text-[15px] font-bold text-foreground">
             {chore.name}
           </p>
+          {chore.note && (
+            <p className="truncate text-[12px] font-semibold text-foreground/60">
+              {chore.note}
+            </p>
+          )}
           <span className="mt-0.5 inline-flex items-center gap-1 rounded-full border-2 border-m-ink bg-white/85 px-2.5 py-0.5 text-[11px] font-extrabold text-m-blue">
             Waiting for {waitingFor}
           </span>
@@ -370,6 +382,7 @@ function ChoreRowKid({
       amount={chore.rewardXlm}
       icon={ListChecksIcon}
       emoji={chore.emoji}
+      note={chore.note}
       tint={chore.tint}
       status={chore.status}
       onClick={chore.status === "todo" ? onTapTodo : undefined}
@@ -531,7 +544,7 @@ function KidStashCard({
 
           {collect.isError && step === "error" && (
             <p className="mt-2 text-center text-[12px] font-bold text-m-pink text-pretty">
-              The bank line is busy — your money is safe, try again in a moment.
+              The bank line is busy. Your money is safe, try again in a moment.
             </p>
           )}
         </div>
@@ -590,8 +603,8 @@ function NodCard({
 
   const copyLink = () => {
     navigator.clipboard.writeText(claimLink).then(
-      () => toast.success("Claim link copied — hand it to your kid!"),
-      () => toast.error("Couldn't copy — try again"),
+      () => toast.success("Claim link copied. Hand it to your kid!"),
+      () => toast.error("Couldn't copy, try again"),
     );
   };
 
@@ -711,7 +724,7 @@ function NodCard({
       </div>
       {stage === "error" && (
         <p className="mt-2 text-center text-[12px] font-bold text-m-pink text-pretty">
-          The bank line is busy — nothing was sent, tap Approve to try again.
+          The bank line is busy. Nothing was sent, tap Approve to try again.
         </p>
       )}
     </div>
@@ -866,15 +879,17 @@ function ParentHome({ chores }: { chores: ChoreRow[] }) {
         {hasKids ? (
           <div className="flex flex-wrap gap-2.5">
             {family!.kidNames.map((k) => (
-              <span
+              <button
                 key={k}
-                className="flex items-center gap-2 rounded-full border-2 border-m-ink bg-m-sky py-1.5 pl-1.5 pr-3.5 shadow-[var(--m-pop-sm)]"
+                type="button"
+                onClick={() => navigate({ to: "/family", search: { g: "kids" } })}
+                className="press-pop flex items-center gap-2 rounded-full border-2 border-m-ink bg-m-sky py-1.5 pl-1.5 pr-3.5 shadow-[var(--m-pop-sm)]"
               >
                 <span className="flex size-7 items-center justify-center rounded-full border-2 border-m-ink bg-card font-display text-sm font-extrabold text-m-blue">
                   {k.charAt(0).toUpperCase()}
                 </span>
                 <span className="font-display text-[15px] font-extrabold">{k}</span>
-              </span>
+              </button>
             ))}
           </div>
         ) : (
@@ -889,7 +904,7 @@ function ParentHome({ chores }: { chores: ChoreRow[] }) {
                 Invite your kid
               </p>
               <p className="text-[13px] font-bold text-muted-foreground text-pretty">
-                Send a link — they join with no accounts, no passwords.
+                Send a link. They join with no accounts, no passwords.
               </p>
             </div>
             <CaretRightIcon className="size-5 text-muted-foreground" weight="bold" />
@@ -929,7 +944,7 @@ function FamilyBankCard() {
         </button>
       </div>
       <p className="mt-2.5 text-[12px] font-semibold text-muted-foreground text-pretty">
-        Your family bank lives on Stellar — top it up any time to fund rewards.
+        Your family bank lives on Stellar. Top it up any time to fund rewards.
       </p>
 
       {/* Quiet secondary action: set up a steady drip into a kid's stash. */}
