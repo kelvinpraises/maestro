@@ -46,7 +46,7 @@ import { useStellarWallet } from "@/providers/stellar-wallet-provider";
 import { useFamily, useKidStreak, useSavingsGoal } from "@/hooks/use-family";
 import { useTreasuryHistory } from "@/hooks/use-treasury-history";
 import { GOAL_NAME_MAX, type SavingsGoal } from "@/lib/family";
-import { truncateAddress, formatRelativeTime } from "@/utils";
+import { truncateAddress } from "@/utils";
 
 export const Route = createFileRoute("/me/")({
   component: MePage,
@@ -480,11 +480,13 @@ function GrownupsPanel({
             Rewards are private. Only your family knows.
           </p>
 
-          {/* Treasury activity — the raw on-chain feed, demoted here (audit 11).
-              This pot is SHARED by every family on this deployment and claims are
-              unattributable by design (the zk point), so it lives under
-              For grown-ups, honestly labeled — never framed as family activity. */}
-          <TreasuryActivity />
+          {/* How claims stay private — the zk story, told honestly and calmly.
+              The treasury pot is SHARED by every family on this deployment and
+              claims are unattributable by design (that's the point). We never
+              show the raw ledger here — a scrolling list of strangers' deposits
+              reads as alarming, not reassuring. Just the benefit, plus a single
+              non-identifying count (never a list, never an address or amount). */}
+          <PrivacyExplainer />
           </div>
         </div>
       </div>
@@ -492,83 +494,33 @@ function GrownupsPanel({
   );
 }
 
-// ── Treasury activity — everyone's deposits/claims, private by design ─────────
+// ── How claims stay private — the zk story, aggregate-only ────────────────────
 //
-// The global on-chain treasury feed (was "What we've been up to" on /family).
-// Reframed here as infrastructure the grown-ups can inspect, with one honest line
-// about why no one — not even us — can tell whose claim is whose.
+// Replaces the old raw on-chain feed (which listed every family's deposits and
+// claims). A family should never see strangers' transactions where they expect
+// their own. So this is one calm line about why the ledger is unattributable,
+// plus a single settled-count — a number, never a list of transactions.
+//
+// The count reuses useTreasuryHistory purely for its length; no per-tx row, no
+// recipient address, no amount of any other family is ever rendered.
 
-function TreasuryActivity() {
-  const { items, isLoading } = useTreasuryHistory();
-  const [showAll, setShowAll] = useState(false);
-  const visible = showAll ? items : items.slice(0, 5);
-  const hidden = items.length - visible.length;
+function PrivacyExplainer() {
+  const { items } = useTreasuryHistory();
+  const claims = items.filter((i) => i.kind === "claimed").length;
 
   return (
     <div className="rounded-2xl border-2 border-m-ink/15 bg-card/60 p-3.5">
-      <p className="text-microlabel text-muted-foreground">Treasury activity</p>
-      <p className="mt-0.5 text-[12px] font-semibold text-muted-foreground/80 text-pretty">
-        Everyone&apos;s deposits and claims. Private by design: no one can tell
-        whose is whose.
+      <p className="text-microlabel text-muted-foreground">How this stays private</p>
+      <p className="mt-1 text-[12px] font-semibold leading-relaxed text-muted-foreground/90 text-pretty">
+        Rewards are claimed privately. On the public ledger, no one can tell
+        which claim belongs to which child, not even us.
       </p>
-
-      {isLoading && items.length === 0 ? (
-        <p className="mt-3 text-[13px] font-semibold text-muted-foreground">
-          Loading…
+      {claims > 0 && (
+        <p className="mt-3 flex items-center gap-1.5 text-[12px] font-bold text-muted-foreground">
+          <LockIcon className="size-3.5 shrink-0 text-m-green-ink" weight="fill" />
+          <span className="tabular-nums">{claims}</span>{" "}
+          private {claims === 1 ? "reward" : "rewards"} settled on Maestro
         </p>
-      ) : items.length === 0 ? (
-        <p className="mt-3 text-[13px] font-semibold text-muted-foreground">
-          No treasury activity yet.
-        </p>
-      ) : (
-        <>
-          <div className="mt-3 space-y-2">
-            {visible.map((item) => {
-              const claimed = item.kind === "claimed";
-              return (
-                <div
-                  key={item.id}
-                  className="flex items-center justify-between gap-3 rounded-xl border-2 border-m-ink/10 bg-card px-3 py-2"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-[13px] font-bold text-foreground">
-                      {claimed ? "Reward claimed" : "Reward funded"}
-                      {item.mine && (
-                        <span className="ml-1.5 align-middle text-[10px] font-extrabold uppercase tracking-wide text-muted-foreground">
-                          · you
-                        </span>
-                      )}
-                    </p>
-                    <p className="truncate text-[11px] font-semibold text-muted-foreground">
-                      {formatRelativeTime(new Date(item.timestamp))}
-                      {claimed && item.to ? ` · to ${truncateAddress(item.to)}` : ""}
-                    </p>
-                  </div>
-                  <span
-                    className={`shrink-0 font-display text-sm font-extrabold tabular-nums ${
-                      claimed ? "text-m-green-ink" : "text-foreground"
-                    }`}
-                  >
-                    {claimed ? "+" : ""}
-                    {item.amountXlm.toFixed(2)}
-                    <span className="ml-0.5 text-[10px] font-bold text-muted-foreground">
-                      XLM
-                    </span>
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-          {hidden > 0 && (
-            <button
-              type="button"
-              onClick={() => setShowAll(true)}
-              className="press-pop mt-2 w-full rounded-full border-2 border-m-ink/15 bg-card/60 py-2 text-center text-[12px] font-extrabold text-muted-foreground hover:text-foreground"
-            >
-              Show all {items.length}
-            </button>
-          )}
-        </>
       )}
     </div>
   );
