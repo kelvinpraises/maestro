@@ -12,7 +12,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useMemo } from "react";
 import {
-  ConfettiIcon,
   GiftIcon,
   SpinnerGapIcon,
   WarningCircleIcon,
@@ -115,15 +114,15 @@ function ClaimLinkPage() {
         ) : imported ? (
           <div className="flex flex-col items-center gap-6">
             <div className="flex size-24 items-center justify-center rounded-full border-2 border-m-ink bg-m-mint shadow-[var(--m-pop)]">
-              <ConfettiIcon className="size-10 text-m-green-ink" weight="duotone" />
+              <GiftIcon className="size-10 text-m-green-ink" weight="duotone" />
             </div>
             <div>
               <h1 className="font-display text-3xl font-extrabold tracking-tight">
-                In your stash! 🎉
+                Reward's yours to claim
               </h1>
               <p className="mt-2 max-w-xs text-[15px] font-bold text-muted-foreground text-pretty">
-                Your {amountXlm.toFixed(2)} XLM reward is ready for a private
-                claim.
+                Your {amountXlm.toFixed(2)} XLM is waiting — claim it privately
+                and watch it land in your stash.
               </p>
             </div>
             <Button

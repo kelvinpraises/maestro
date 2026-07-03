@@ -29,8 +29,11 @@ import {
   UserPlusIcon,
   DropIcon,
   SpinnerGapIcon,
+  CopyIcon,
+  DownloadSimpleIcon,
 } from "@phosphor-icons/react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import { EarningsHero } from "@/components/organisms/earnings-hero";
 import { QuestCard, type QuestTint } from "@/components/molecules/quest-card";
 import { IconTile, EmojiTile } from "@/components/atoms/icon-tile";
@@ -45,9 +48,15 @@ import {
 } from "@/components/molecules/dialog";
 import { Button } from "@/components/atoms/button";
 import { useStellarWallet } from "@/providers/stellar-wallet-provider";
-import { useMyRewards } from "@/hooks/use-rewards";
+import { useMyRewards, useFundReward } from "@/hooks/use-rewards";
 import { useFamily, useChoreStates } from "@/hooks/use-family";
-import { loadFamily, type Chore, type ChoreState } from "@/lib/family";
+import {
+  loadFamily,
+  buildClaimLink,
+  importNote,
+  type Chore,
+  type ChoreState,
+} from "@/lib/family";
 import { zwerc20 } from "@/contracts/stellar";
 import { useAllowanceDrip } from "@/hooks/use-allowance-drip";
 import { useCollectAllowance, type CollectStep } from "@/hooks/use-allowance";
@@ -603,6 +612,180 @@ function KidStashCard({
 //  PARENT HOME — the nod + family bank + overview. The team's-doing mirror.
 // ═════════════════════════════════════════════════════════════════════════════
 
+// The approve-flow state machine, per nod card (DESIGN-STORY §2 Story B / §5):
+//   idle  →  funding   (parent tapped "Approve & send"; useFundReward running)
+//   funding → funded   (deposit landed on-chain; claim link built, chore → done)
+//         →  error     (fund failed; chore stays pending, retriable — Story D)
+// `funded` shows the same-device hand-off: copy claim link, or drop the note
+// straight into this device's stash (the demo shortcut).
+type NodStage = "idle" | "funding" | "funded" | "error";
+
+/** One "Needs your nod" card with its own pay-on-approve loop. */
+function NodCard({
+  chore,
+  soleKid,
+  kidLivesHere,
+  onDismiss,
+  onPaid,
+}: {
+  chore: ChoreRow;
+  soleKid: string | null;
+  kidLivesHere: boolean;
+  onDismiss: () => void;
+  onPaid: () => void;
+}) {
+  const fund = useFundReward();
+  const [stage, setStage] = useState<NodStage>("idle");
+  const [claimLink, setClaimLink] = useState("");
+  const [added, setAdded] = useState(false);
+
+  const approve = () => {
+    setStage("funding");
+    fund.mutate(
+      { amountXlm: chore.rewardXlm, label: chore.name },
+      {
+        onSuccess: ({ note }) => {
+          setClaimLink(buildClaimLink(note));
+          setStage("funded");
+          // The chore is paid → celebrate it on the kid's home (done row).
+          onPaid();
+        },
+        // Honest failure (Story D): stay on this card, chore stays pending.
+        onError: () => setStage("error"),
+      },
+    );
+  };
+
+  const copyLink = () => {
+    navigator.clipboard.writeText(claimLink).then(
+      () => toast.success("Claim link copied — hand it to your kid!"),
+      () => toast.error("Couldn't copy — try again"),
+    );
+  };
+
+  // Same-device demo shortcut: import the funded note into THIS device's stash
+  // (the exact localStorage shape useMyRewards reads), so switching to the kid
+  // role shows it ready to claim — no link round-trip.
+  const addToStash = () => {
+    if (!fund.data) return;
+    const wrote = importNote(fund.data.note);
+    window.dispatchEvent(new Event("maestro:reward-notes-changed"));
+    setAdded(true);
+    toast.success(
+      wrote ? "Added to this device's stash 🎁" : "Already in the stash",
+    );
+  };
+
+  const kidLabel = soleKid ?? "your kid";
+
+  // ── funded: the reward is hidden; offer the hand-off ─────────────────────────
+  if (stage === "funded") {
+    return (
+      <div className="animate-pop-in card-pop card-pop-mint p-3.5">
+        <div className="flex items-center gap-3">
+          <IconTile icon={GiftIcon} tint="green" size="lg" bordered />
+          <div className="min-w-0 flex-1">
+            <p className="truncate font-display text-[15px] font-extrabold">
+              Reward hidden for {kidLabel} 🎁
+            </p>
+            <p className="text-[13px] font-bold text-muted-foreground">
+              <span className="font-extrabold tabular-nums text-m-green-ink">
+                {chore.rewardXlm.toFixed(2)} XLM
+              </span>{" "}
+              tucked away · {chore.name}
+            </p>
+          </div>
+        </div>
+        <div className="mt-3 flex flex-col gap-2">
+          <Button size="sm" className="w-full" onClick={copyLink}>
+            <CopyIcon className="mr-1.5 size-4" weight="bold" />
+            Copy claim link
+          </Button>
+          {kidLivesHere && (
+            <button
+              type="button"
+              onClick={addToStash}
+              disabled={added}
+              className="press-pop flex w-full items-center justify-center gap-1.5 rounded-full border-2 border-m-ink/25 bg-white/60 px-3.5 py-2.5 font-display text-[13px] font-extrabold text-foreground disabled:opacity-60"
+            >
+              <DownloadSimpleIcon className="size-4" weight="bold" />
+              {added ? "In this device's stash" : "Add to this device's stash"}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="press-pop mt-0.5 text-center text-[12px] font-extrabold text-muted-foreground hover:text-foreground"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── idle / funding / error: the nod itself ───────────────────────────────────
+  const funding = stage === "funding" || fund.isPending;
+
+  return (
+    <div className="animate-pop-in card-pop card-pop-mint p-3.5">
+      <div className="flex items-center gap-3">
+        {chore.emoji ? (
+          <EmojiTile emoji={chore.emoji} tint="green" size="lg" bordered />
+        ) : (
+          <IconTile icon={ListChecksIcon} tint="green" size="lg" bordered />
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-display text-[15px] font-extrabold">
+            {chore.name}
+          </p>
+          <p className="text-[13px] font-bold text-muted-foreground">
+            {soleKid ? `${soleKid} says it's done` : "Marked done"}
+            {" · "}
+            <span className="font-extrabold tabular-nums text-m-green-ink">
+              {chore.rewardXlm.toFixed(2)} XLM
+            </span>
+          </p>
+        </div>
+      </div>
+      <div className="mt-3 flex gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          className="flex-1"
+          disabled={funding}
+          onClick={onDismiss}
+        >
+          Not yet
+        </Button>
+        <Button
+          size="sm"
+          className="flex-1"
+          disabled={funding}
+          onClick={approve}
+        >
+          {funding ? (
+            <>
+              <SpinnerGapIcon className="mr-1 size-4 animate-spin" weight="bold" />
+              Tucking it away…
+            </>
+          ) : (
+            <>
+              <CheckIcon className="mr-1 size-4" weight="bold" />
+              Approve &amp; send {chore.rewardXlm.toFixed(2)} XLM
+            </>
+          )}
+        </Button>
+      </div>
+      {stage === "error" && (
+        <p className="mt-2 text-center text-[12px] font-bold text-m-pink text-pretty">
+          The bank line is busy — nothing was sent, tap Approve to try again.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function ParentHome({ chores }: { chores: ChoreRow[] }) {
   const navigate = useNavigate();
   const { family } = useFamily();
@@ -613,8 +796,24 @@ function ParentHome({ chores }: { chores: ChoreRow[] }) {
   const soleKid =
     family && family.kidNames.length === 1 ? family.kidNames[0] : null;
 
-  const pending = chores.filter((c) => c.status === "pending");
+  // Funding a nod flips the chore to "done" (so it celebrates on the kid's home),
+  // but the parent still needs the funded card's hand-off (copy link / add to
+  // stash). So we keep any chore we just funded in the nod queue until the parent
+  // dismisses it — the pending filter alone would yank the card mid-hand-off.
+  const [justFunded, setJustFunded] = useState<Set<string>>(new Set());
+  const nodChores = chores.filter(
+    (c) => c.status === "pending" || justFunded.has(c.id),
+  );
   const hasKids = (family?.kidNames.length ?? 0) > 0;
+
+  // Same-device demo reality (DESIGN-STORY §5, step 5): in the demo, the parent
+  // and kid share one browser's localStorage — so after funding we can offer to
+  // drop the reward straight into THIS device's stash (importNote), no link
+  // round-trip. In a real two-device family the parent would only copy/share the
+  // link. We surface both: copy link (primary) + add-to-this-stash (secondary).
+  // ParentHome only ever renders on a parent device, so this is always true;
+  // named for intent so the NodCard's demo affordance reads honestly.
+  const kidLivesHere = true;
 
   return (
     <div className="stagger-rise space-y-5">
@@ -627,7 +826,7 @@ function ParentHome({ chores }: { chores: ChoreRow[] }) {
       />
 
       {/* Needs your nod — approvals FIRST when non-empty. */}
-      {pending.length > 0 && (
+      {nodChores.length > 0 && (
         <section className="space-y-3">
           <div className="flex items-center justify-between px-1">
             <h2 className="flex items-center gap-1.5 font-display text-lg font-extrabold">
@@ -635,59 +834,31 @@ function ParentHome({ chores }: { chores: ChoreRow[] }) {
               Needs your nod
             </h2>
             <span className="rounded-full border-2 border-m-ink bg-primary/20 px-2.5 py-0.5 text-xs font-extrabold text-m-green-ink">
-              {pending.length}
+              {nodChores.length}
             </span>
           </div>
           <div className="space-y-2.5">
-            {pending.map((c) => (
-              <div key={c.id} className="animate-pop-in card-pop card-pop-mint p-3.5">
-                <div className="flex items-center gap-3">
-                  {c.emoji ? (
-                    <EmojiTile emoji={c.emoji} tint="green" size="lg" bordered />
-                  ) : (
-                    <IconTile icon={ListChecksIcon} tint="green" size="lg" bordered />
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-display text-[15px] font-extrabold">
-                      {c.name}
-                    </p>
-                    <p className="text-[13px] font-bold text-muted-foreground">
-                      {soleKid ? `${soleKid} says it's done` : "Marked done"}
-                      {" · "}
-                      <span className="font-extrabold tabular-nums text-m-green-ink">
-                        {c.rewardXlm.toFixed(2)} XLM
-                      </span>
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-3 flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1"
-                    onClick={() => setChoreState(c.id, "todo")}
-                  >
-                    Not yet
-                  </Button>
-                  <Button
-                    size="sm"
-                    className="flex-1"
-                    onClick={() => {
-                      // STEP-5 SEAM: the full pay-on-approve loop (fund reward →
-                      // hand off claim link → kid celebration) lands in step 5.
-                      // For now we route to the family screen's send-a-reward
-                      // flow; there is no search-param prefill on /circles yet,
-                      // so the parent picks the chore there. When step 5 wires
-                      // fund-on-approve, replace this navigate with the mutation
-                      // and flip the chore to "done" on success.
-                      navigate({ to: "/circles" });
-                    }}
-                  >
-                    <CheckIcon className="mr-1 size-4" weight="bold" />
-                    Approve &amp; send
-                  </Button>
-                </div>
-              </div>
+            {nodChores.map((c) => (
+              <NodCard
+                key={c.id}
+                chore={c}
+                soleKid={soleKid}
+                kidLivesHere={kidLivesHere}
+                onDismiss={() => {
+                  // Dismiss from a not-yet-funded card = send it back to todo.
+                  // Dismiss ("Done") after funding = just drop it from the queue.
+                  if (!justFunded.has(c.id)) setChoreState(c.id, "todo");
+                  setJustFunded((s) => {
+                    const next = new Set(s);
+                    next.delete(c.id);
+                    return next;
+                  });
+                }}
+                onPaid={() => {
+                  setChoreState(c.id, "done");
+                  setJustFunded((s) => new Set(s).add(c.id));
+                }}
+              />
             ))}
           </div>
         </section>

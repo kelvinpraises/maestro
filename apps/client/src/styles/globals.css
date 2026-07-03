@@ -320,6 +320,22 @@
     50% { boxshadow: 0 0 0 12px var(--color-neutral-300); }
     100% { boxshadow: 0 0 0 12px transparent; }
   }
+  /* THE one confetti — a scrap of chunky card falling, drifting, spinning.
+     Per-piece drift/spin come in as --confetti-drift / --confetti-spin. */
+  @keyframes confetti-fall {
+    0% {
+      transform: translateY(0) translateX(0) rotate(0deg);
+      opacity: 0;
+    }
+    12% { opacity: 1; }
+    100% {
+      transform:
+        translateY(112vh)
+        translateX(var(--confetti-drift, 0px))
+        rotate(var(--confetti-spin, 360deg));
+      opacity: 0.9;
+    }
+  }
   @keyframes flip-btn {
     to { transform: rotate(360deg); }
   }

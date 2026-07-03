@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   GiftIcon,
   PlusIcon,
@@ -7,10 +7,12 @@ import {
   SparkleIcon,
   SpinnerGapIcon,
   ShieldCheckIcon,
-  ConfettiIcon,
   LockIcon,
 } from "@phosphor-icons/react";
 import { IconTile } from "@/components/atoms/icon-tile";
+import { ConfettiBurst } from "@/components/atoms/confetti-burst";
+import { useStellarWallet } from "@/providers/stellar-wallet-provider";
+import { useCountUp } from "@/hooks/use-count-up";
 import { cn } from "@/utils";
 import {
   useFundReward,
@@ -24,12 +26,14 @@ export const Route = createFileRoute("/rewards/")({
   component: RewardsPage,
 });
 
+// Kid-words staged copy for the private claim (Story B: "checking… sealing…
+// yours!"), mapped to the claim mutation's real step state.
 const CLAIM_STEP_LABEL: Record<ClaimStep, string> = {
   idle: "",
-  rebuilding: "Reading the treasury…",
-  proving: "Making your secret proof…",
-  submitting: "Claiming your XLM…",
-  done: "Claimed!",
+  rebuilding: "Checking…",
+  proving: "Sealing…",
+  submitting: "Almost yours…",
+  done: "Yours!",
   error: "Something went wrong",
 };
 
@@ -47,8 +51,22 @@ function RewardsPage() {
   const claimable = rewardList.filter((r) => !r.claimed);
   const claimed = rewardList.filter((r) => r.claimed);
 
+  // THE money moment lives at the page level, not inside a claim card — the card
+  // unmounts the instant its note flips to "claimed", so the confetti + count-up
+  // have to outlive it here. `celebrate` holds the just-landed amount; the
+  // ConfettiBurst self-removes ~1.5s later.
+  const { xlmBalance } = useStellarWallet();
+  const stashBalance = xlmBalance === null ? 0 : parseFloat(xlmBalance);
+  const displayBalance = useCountUp(stashBalance);
+  const [celebrate, setCelebrate] = useState<number | null>(null);
+
   return (
     <div className="stagger-rise space-y-5">
+      {/* THE one confetti — fires once when a reward's money lands in the stash. */}
+      {celebrate !== null && (
+        <ConfettiBurst onDone={() => setCelebrate(null)} />
+      )}
+
       <header>
         <h1 className="font-display text-3xl font-extrabold tracking-tight">Rewards</h1>
         <p className="mt-1 text-[15px] font-bold text-muted-foreground text-pretty">
@@ -56,6 +74,26 @@ function RewardsPage() {
           privately — nobody can tell who earned what.
         </p>
       </header>
+
+      {/* Into-your-stash banner: the money-landed count-up, page-level so it
+          survives the claim card unmounting. */}
+      {celebrate !== null && (
+        <div className="animate-pop-in card-pop card-pop-mint flex items-center gap-3 p-4">
+          <IconTile icon={SparkleIcon} tint="green" bordered />
+          <div className="min-w-0 flex-1">
+            <p className="font-display text-[15px] font-extrabold text-m-green-ink">
+              Into your stash!
+            </p>
+            <p className="text-[13px] font-bold text-muted-foreground">
+              +{celebrate.toFixed(2)} XLM
+              <span className="mx-1 text-m-green-ink/40">·</span>
+              <span className="tabular-nums text-m-green-ink">
+                {displayBalance.toFixed(2)} XLM
+              </span>
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ── Fund a reward (parent) ─────────────────────────────────────────── */}
       <section className="space-y-3 card-pop p-4">
@@ -146,7 +184,11 @@ function RewardsPage() {
         ) : (
           <div className="space-y-2.5">
             {claimable.map((r) => (
-              <ClaimableCard key={r.id} reward={r} />
+              <ClaimableCard
+                key={r.id}
+                reward={r}
+                onClaimed={() => setCelebrate(r.amountXlm)}
+              />
             ))}
           </div>
         )}
@@ -188,10 +230,28 @@ function RewardsPage() {
 
 // ── one claimable reward, with its own claim state machine ────────────────────
 
-function ClaimableCard({ reward }: { reward: RewardView }) {
+function ClaimableCard({
+  reward,
+  onClaimed,
+}: {
+  reward: RewardView;
+  onClaimed: () => void;
+}) {
   const claim = useClaimReward();
   const busy = claim.isPending;
   const stepLabel = CLAIM_STEP_LABEL[claim.step];
+  const landed = claim.isSuccess;
+
+  // Hand the money-landed moment up to the page: it owns THE confetti + the
+  // stash count-up, so they outlive this card (which unmounts the instant its
+  // note flips to "claimed"). Fire once, on the success edge.
+  const firedRef = useRef(false);
+  useEffect(() => {
+    if (landed && !firedRef.current) {
+      firedRef.current = true;
+      onClaimed();
+    }
+  }, [landed, onClaimed]);
 
   return (
     <div className="animate-pop-in card-pop p-3.5">
@@ -216,14 +276,14 @@ function ClaimableCard({ reward }: { reward: RewardView }) {
 
       <button
         type="button"
-        disabled={busy || claim.isSuccess}
+        disabled={busy || landed}
         onClick={() => claim.mutate({ note: reward })}
         className="press-pop mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-full border-2 border-m-ink bg-primary font-display text-sm font-extrabold text-primary-foreground shadow-[var(--m-pop)] hover:brightness-[1.03] disabled:opacity-60"
       >
-        {claim.isSuccess ? (
+        {landed ? (
           <>
-            <ConfettiIcon className="size-4" weight="fill" />
-            Claimed {reward.amountXlm.toFixed(2)} XLM!
+            <SparkleIcon className="size-4" weight="fill" />
+            Into your stash!
           </>
         ) : busy ? (
           <>
@@ -237,9 +297,10 @@ function ClaimableCard({ reward }: { reward: RewardView }) {
           </>
         )}
       </button>
+
       {claim.isError && (
-        <p className="mt-2 text-center text-[12px] font-bold text-m-pink">
-          {claim.error.message}
+        <p className="mt-2 text-center text-[12px] font-bold text-m-pink text-pretty">
+          The bank line is busy — your reward is safe, try again in a moment.
         </p>
       )}
     </div>
