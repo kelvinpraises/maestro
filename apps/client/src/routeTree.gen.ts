@@ -9,38 +9,19 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './app/__root'
-import { Route as WalletRouteImport } from './app/wallet'
 import { Route as SettingsRouteImport } from './app/settings'
-import { Route as ProposalsRouteImport } from './app/proposals'
 import { Route as JoinRouteImport } from './app/join'
 import { Route as HistoryRouteImport } from './app/history'
 import { Route as DashboardRouteImport } from './app/dashboard'
-import { Route as ContactsRouteImport } from './app/contacts'
 import { Route as ClaimLinkRouteImport } from './app/claim-link'
 import { Route as IndexRouteImport } from './app/index'
-import { Route as YieldboxIndexRouteImport } from './app/yieldbox/index'
 import { Route as StreamsIndexRouteImport } from './app/streams/index'
 import { Route as RewardsIndexRouteImport } from './app/rewards/index'
 import { Route as CirclesIndexRouteImport } from './app/circles/index'
-import { Route as StreamsStreamIdRouteImport } from './app/streams/$streamId'
-import { Route as OauthAuthorizeRouteImport } from './app/oauth/authorize'
-import { Route as ClaimPageIdRouteImport } from './app/claim/$pageId'
-import { Route as CirclesJoinRouteImport } from './app/circles/join'
-import { Route as CirclesCircleIdRouteImport } from './app/circles/$circleId'
 
-const WalletRoute = WalletRouteImport.update({
-  id: '/wallet',
-  path: '/wallet',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ProposalsRoute = ProposalsRouteImport.update({
-  id: '/proposals',
-  path: '/proposals',
   getParentRoute: () => rootRouteImport,
 } as any)
 const JoinRoute = JoinRouteImport.update({
@@ -58,11 +39,6 @@ const DashboardRoute = DashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ContactsRoute = ContactsRouteImport.update({
-  id: '/contacts',
-  path: '/contacts',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ClaimLinkRoute = ClaimLinkRouteImport.update({
   id: '/claim-link',
   path: '/claim-link',
@@ -71,11 +47,6 @@ const ClaimLinkRoute = ClaimLinkRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const YieldboxIndexRoute = YieldboxIndexRouteImport.update({
-  id: '/yieldbox/',
-  path: '/yieldbox/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const StreamsIndexRoute = StreamsIndexRouteImport.update({
@@ -93,198 +64,96 @@ const CirclesIndexRoute = CirclesIndexRouteImport.update({
   path: '/circles/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const StreamsStreamIdRoute = StreamsStreamIdRouteImport.update({
-  id: '/streams/$streamId',
-  path: '/streams/$streamId',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const OauthAuthorizeRoute = OauthAuthorizeRouteImport.update({
-  id: '/oauth/authorize',
-  path: '/oauth/authorize',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ClaimPageIdRoute = ClaimPageIdRouteImport.update({
-  id: '/claim/$pageId',
-  path: '/claim/$pageId',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CirclesJoinRoute = CirclesJoinRouteImport.update({
-  id: '/circles/join',
-  path: '/circles/join',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CirclesCircleIdRoute = CirclesCircleIdRouteImport.update({
-  id: '/circles/$circleId',
-  path: '/circles/$circleId',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/claim-link': typeof ClaimLinkRoute
-  '/contacts': typeof ContactsRoute
   '/dashboard': typeof DashboardRoute
   '/history': typeof HistoryRoute
   '/join': typeof JoinRoute
-  '/proposals': typeof ProposalsRoute
   '/settings': typeof SettingsRoute
-  '/wallet': typeof WalletRoute
-  '/circles/$circleId': typeof CirclesCircleIdRoute
-  '/circles/join': typeof CirclesJoinRoute
-  '/claim/$pageId': typeof ClaimPageIdRoute
-  '/oauth/authorize': typeof OauthAuthorizeRoute
-  '/streams/$streamId': typeof StreamsStreamIdRoute
   '/circles/': typeof CirclesIndexRoute
   '/rewards/': typeof RewardsIndexRoute
   '/streams/': typeof StreamsIndexRoute
-  '/yieldbox/': typeof YieldboxIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/claim-link': typeof ClaimLinkRoute
-  '/contacts': typeof ContactsRoute
   '/dashboard': typeof DashboardRoute
   '/history': typeof HistoryRoute
   '/join': typeof JoinRoute
-  '/proposals': typeof ProposalsRoute
   '/settings': typeof SettingsRoute
-  '/wallet': typeof WalletRoute
-  '/circles/$circleId': typeof CirclesCircleIdRoute
-  '/circles/join': typeof CirclesJoinRoute
-  '/claim/$pageId': typeof ClaimPageIdRoute
-  '/oauth/authorize': typeof OauthAuthorizeRoute
-  '/streams/$streamId': typeof StreamsStreamIdRoute
   '/circles': typeof CirclesIndexRoute
   '/rewards': typeof RewardsIndexRoute
   '/streams': typeof StreamsIndexRoute
-  '/yieldbox': typeof YieldboxIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/claim-link': typeof ClaimLinkRoute
-  '/contacts': typeof ContactsRoute
   '/dashboard': typeof DashboardRoute
   '/history': typeof HistoryRoute
   '/join': typeof JoinRoute
-  '/proposals': typeof ProposalsRoute
   '/settings': typeof SettingsRoute
-  '/wallet': typeof WalletRoute
-  '/circles/$circleId': typeof CirclesCircleIdRoute
-  '/circles/join': typeof CirclesJoinRoute
-  '/claim/$pageId': typeof ClaimPageIdRoute
-  '/oauth/authorize': typeof OauthAuthorizeRoute
-  '/streams/$streamId': typeof StreamsStreamIdRoute
   '/circles/': typeof CirclesIndexRoute
   '/rewards/': typeof RewardsIndexRoute
   '/streams/': typeof StreamsIndexRoute
-  '/yieldbox/': typeof YieldboxIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/claim-link'
-    | '/contacts'
     | '/dashboard'
     | '/history'
     | '/join'
-    | '/proposals'
     | '/settings'
-    | '/wallet'
-    | '/circles/$circleId'
-    | '/circles/join'
-    | '/claim/$pageId'
-    | '/oauth/authorize'
-    | '/streams/$streamId'
     | '/circles/'
     | '/rewards/'
     | '/streams/'
-    | '/yieldbox/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/claim-link'
-    | '/contacts'
     | '/dashboard'
     | '/history'
     | '/join'
-    | '/proposals'
     | '/settings'
-    | '/wallet'
-    | '/circles/$circleId'
-    | '/circles/join'
-    | '/claim/$pageId'
-    | '/oauth/authorize'
-    | '/streams/$streamId'
     | '/circles'
     | '/rewards'
     | '/streams'
-    | '/yieldbox'
   id:
     | '__root__'
     | '/'
     | '/claim-link'
-    | '/contacts'
     | '/dashboard'
     | '/history'
     | '/join'
-    | '/proposals'
     | '/settings'
-    | '/wallet'
-    | '/circles/$circleId'
-    | '/circles/join'
-    | '/claim/$pageId'
-    | '/oauth/authorize'
-    | '/streams/$streamId'
     | '/circles/'
     | '/rewards/'
     | '/streams/'
-    | '/yieldbox/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ClaimLinkRoute: typeof ClaimLinkRoute
-  ContactsRoute: typeof ContactsRoute
   DashboardRoute: typeof DashboardRoute
   HistoryRoute: typeof HistoryRoute
   JoinRoute: typeof JoinRoute
-  ProposalsRoute: typeof ProposalsRoute
   SettingsRoute: typeof SettingsRoute
-  WalletRoute: typeof WalletRoute
-  CirclesCircleIdRoute: typeof CirclesCircleIdRoute
-  CirclesJoinRoute: typeof CirclesJoinRoute
-  ClaimPageIdRoute: typeof ClaimPageIdRoute
-  OauthAuthorizeRoute: typeof OauthAuthorizeRoute
-  StreamsStreamIdRoute: typeof StreamsStreamIdRoute
   CirclesIndexRoute: typeof CirclesIndexRoute
   RewardsIndexRoute: typeof RewardsIndexRoute
   StreamsIndexRoute: typeof StreamsIndexRoute
-  YieldboxIndexRoute: typeof YieldboxIndexRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/wallet': {
-      id: '/wallet'
-      path: '/wallet'
-      fullPath: '/wallet'
-      preLoaderRoute: typeof WalletRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/settings': {
       id: '/settings'
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/proposals': {
-      id: '/proposals'
-      path: '/proposals'
-      fullPath: '/proposals'
-      preLoaderRoute: typeof ProposalsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/join': {
@@ -308,13 +177,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/contacts': {
-      id: '/contacts'
-      path: '/contacts'
-      fullPath: '/contacts'
-      preLoaderRoute: typeof ContactsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/claim-link': {
       id: '/claim-link'
       path: '/claim-link'
@@ -327,13 +189,6 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/yieldbox/': {
-      id: '/yieldbox/'
-      path: '/yieldbox'
-      fullPath: '/yieldbox/'
-      preLoaderRoute: typeof YieldboxIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/streams/': {
@@ -357,63 +212,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CirclesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/streams/$streamId': {
-      id: '/streams/$streamId'
-      path: '/streams/$streamId'
-      fullPath: '/streams/$streamId'
-      preLoaderRoute: typeof StreamsStreamIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/oauth/authorize': {
-      id: '/oauth/authorize'
-      path: '/oauth/authorize'
-      fullPath: '/oauth/authorize'
-      preLoaderRoute: typeof OauthAuthorizeRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/claim/$pageId': {
-      id: '/claim/$pageId'
-      path: '/claim/$pageId'
-      fullPath: '/claim/$pageId'
-      preLoaderRoute: typeof ClaimPageIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/circles/join': {
-      id: '/circles/join'
-      path: '/circles/join'
-      fullPath: '/circles/join'
-      preLoaderRoute: typeof CirclesJoinRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/circles/$circleId': {
-      id: '/circles/$circleId'
-      path: '/circles/$circleId'
-      fullPath: '/circles/$circleId'
-      preLoaderRoute: typeof CirclesCircleIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ClaimLinkRoute: ClaimLinkRoute,
-  ContactsRoute: ContactsRoute,
   DashboardRoute: DashboardRoute,
   HistoryRoute: HistoryRoute,
   JoinRoute: JoinRoute,
-  ProposalsRoute: ProposalsRoute,
   SettingsRoute: SettingsRoute,
-  WalletRoute: WalletRoute,
-  CirclesCircleIdRoute: CirclesCircleIdRoute,
-  CirclesJoinRoute: CirclesJoinRoute,
-  ClaimPageIdRoute: ClaimPageIdRoute,
-  OauthAuthorizeRoute: OauthAuthorizeRoute,
-  StreamsStreamIdRoute: StreamsStreamIdRoute,
   CirclesIndexRoute: CirclesIndexRoute,
   RewardsIndexRoute: RewardsIndexRoute,
   StreamsIndexRoute: StreamsIndexRoute,
-  YieldboxIndexRoute: YieldboxIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

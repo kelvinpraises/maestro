@@ -1,7 +1,6 @@
 import { createRootRoute, Outlet, useLocation } from "@tanstack/react-router";
-import RootProvider, { LightProvider } from "@/providers";
+import RootProvider from "@/providers";
 import { Toaster } from "@/components/molecules/sonner";
-import { PasswordDialog } from "@/components/organisms/password-dialog";
 import { AuthGuard } from "@/components/organisms/auth-guard";
 import { BottomNav } from "@/components/molecules/bottom-nav";
 import "@/styles/globals.css";
@@ -15,37 +14,21 @@ function RootLayout() {
   const isHomePage = location.pathname === "/";
   const isFullscreenRoute =
     location.pathname.startsWith("/join") ||
-    location.pathname.startsWith("/claim-link") ||
-    location.pathname.startsWith("/oauth/") ||
-    location.pathname.startsWith("/claim/");
-
-  if (location.pathname.startsWith("/oauth/")) {
-    return (
-      <LightProvider>
-        <Outlet />
-        <Toaster />
-      </LightProvider>
-    );
-  }
+    location.pathname.startsWith("/claim-link");
 
   if (isHomePage || isFullscreenRoute) {
-    // Kid-facing entry points (claim page, family invite, reward claim link)
-    // shouldn't be gated behind the grown-up password dialog.
-    const skipPassword =
-      location.pathname.startsWith("/claim/") ||
-      location.pathname.startsWith("/claim-link") ||
-      location.pathname.startsWith("/join");
+    // Kid-facing entry points (family invite, reward claim link) render on their
+    // own, without the app shell chrome.
     return (
       <RootProvider>
         <Outlet />
-        {!skipPassword && <PasswordDialog />}
         <Toaster />
       </RootProvider>
     );
   }
 
-  // Authenticated app — Maestro mobile shell: a centered phone-width column on
-  // the pale-lavender dot-grid canvas, with the playful bottom nav.
+  // Maestro mobile shell: a centered phone-width column on the pale-lavender
+  // dot-grid canvas, with the playful bottom nav.
   return (
     <RootProvider>
       <AuthGuard>
@@ -58,7 +41,6 @@ function RootLayout() {
           </div>
         </div>
       </AuthGuard>
-      <PasswordDialog />
       <Toaster />
       {/* <TanStackRouterDevtools /> */}
     </RootProvider>

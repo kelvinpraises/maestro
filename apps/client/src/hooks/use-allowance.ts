@@ -1,6 +1,6 @@
 // use-allowance.ts — Stellar-native allowance hooks backed by the `drips`
-// streaming contract. This is the Maestro replacement for the dead EVM stream
-// hooks (use-stream-create / use-stream-reads / use-stream-collect).
+// streaming contract. This is the Maestro replacement for the retired EVM
+// streaming hooks.
 //
 // Product vocabulary: an "allowance" is a drips stream of native XLM from a
 // parent's wallet to a recipient (a kid, or — in the single-wallet demo — the

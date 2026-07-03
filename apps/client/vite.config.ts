@@ -46,7 +46,6 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": resolve(__dirname, "./src"),
-      "sodium-javascript": resolve(__dirname, "node_modules/sodium-javascript"),
       // The generated Soroban bindings (linked from ../../packages/bindings via
       // `file:` deps) `import { Buffer } from "buffer"`. Point bare `buffer` at
       // the real installed polyfill package so those external modules resolve.
@@ -61,6 +60,5 @@ export default defineConfig({
   },
   optimizeDeps: {
     exclude: ["snarkjs"],
-    include: ["@xylkstream/wdk-4337"],
   },
 });

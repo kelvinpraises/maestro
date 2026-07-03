@@ -1,5 +1,5 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { ScrollText, PiggyBank, Smile } from "lucide-react";
+import { ScrollText, Smile } from "lucide-react";
 import { cn } from "@/utils";
 
 type NavItem = {
@@ -17,16 +17,10 @@ const items: NavItem[] = [
     match: (p) => p === "/dashboard" || p.startsWith("/streams") || p.startsWith("/rewards") || p.startsWith("/history"),
   },
   {
-    to: "/yieldbox",
-    label: "Store",
-    icon: PiggyBank,
-    match: (p) => p.startsWith("/yieldbox"),
-  },
-  {
     to: "/settings",
     label: "Me",
     icon: Smile,
-    match: (p) => p.startsWith("/settings") || p.startsWith("/circles") || p.startsWith("/contacts") || p.startsWith("/wallet") || p.startsWith("/proposals"),
+    match: (p) => p.startsWith("/settings") || p.startsWith("/circles"),
   },
 ];
 

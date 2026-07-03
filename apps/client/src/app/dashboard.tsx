@@ -1,7 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Bell, Sparkles, ListChecks, PiggyBank, ChevronRight, Gift } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { WelcomeDialog } from "@/components/organisms/welcome-dialog";
 import { EarningsHero } from "@/components/organisms/earnings-hero";
 import { QuestCard, type QuestTint } from "@/components/molecules/quest-card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/atoms/avatar";
@@ -93,8 +92,6 @@ function DashboardPage() {
 
   return (
     <div className="stagger-rise space-y-5">
-      <WelcomeDialog />
-
       {/* Greeting header */}
       <header className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -124,10 +121,10 @@ function DashboardPage() {
       {/* Earnings hero */}
       <EarningsHero amount={earnedThisWeek} streakDays={6} />
 
-      {/* My Stash mini-card → goals */}
+      {/* My Stash mini-card → treasury activity / earnings history */}
       <button
         type="button"
-        onClick={() => navigate({ to: "/yieldbox" })}
+        onClick={() => navigate({ to: "/history" })}
         className="animate-pop-in flex w-full items-center gap-3 rounded-3xl border border-border/60 bg-card p-4 text-left shadow-sm transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-md active:scale-[0.99]"
       >
         <span className="flex size-11 items-center justify-center rounded-2xl bg-m-butter text-xl shadow-sm">

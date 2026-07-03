@@ -7,6 +7,10 @@ out/
 .DS_Store
 *.db
 
+# editor / tooling (kept local only)
+.claude/
+.vscode/
+
 # design reference dump (kept local only)
 Hackathon Projects/
 
@@ -14,6 +18,3 @@ Hackathon Projects/
 # proving artifacts (vkey embedded at compile time, zkey/wasm used by the prover)
 !circuits/out/
 !circuits/out/**
-# wdk-4337 build stub ships its dist
-!apps/packages/wdk-4337/dist/
-!apps/packages/wdk-4337/dist/**

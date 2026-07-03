@@ -1,12 +1,7 @@
 import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { PrivyProvider } from "./privy-provider";
-import { ChainProvider } from "./chain-provider";
-import { StealthWalletProvider } from "./stealth-wallet-provider";
 import { StellarWalletProvider } from "./stellar-wallet-provider";
-import { PendingProvider } from "./pending-provider";
 import { ThemeProvider } from "./theme-provider";
-import { SidebarProvider } from "@/components/organisms/sidebar";
 
 interface RootProviderProps {
   children: ReactNode;
@@ -25,33 +20,8 @@ export default function RootProvider({ children }: RootProviderProps) {
   return (
     <ThemeProvider>
       <QueryClientProvider client={queryClient}>
-        <PrivyProvider>
-          {/* Stellar in-app wallet — the active identity for the family
-              treasury. Wraps the legacy EVM providers, which stay mounted only
-              so the not-yet-migrated feature hooks keep compiling. */}
-          <StellarWalletProvider>
-            <ChainProvider>
-              <StealthWalletProvider>
-                <PendingProvider>
-                  <SidebarProvider>{children}</SidebarProvider>
-                </PendingProvider>
-              </StealthWalletProvider>
-            </ChainProvider>
-          </StellarWalletProvider>
-        </PrivyProvider>
-      </QueryClientProvider>
-    </ThemeProvider>
-  );
-}
-
-/** Minimal provider stack for pages that only need auth (e.g. OAuth). */
-export function LightProvider({ children }: { children: ReactNode }) {
-  return (
-    <ThemeProvider>
-      <QueryClientProvider client={queryClient}>
-        <PrivyProvider>
-          {children}
-        </PrivyProvider>
+        {/* Stellar in-app wallet — the active identity for the family treasury. */}
+        <StellarWalletProvider>{children}</StellarWalletProvider>
       </QueryClientProvider>
     </ThemeProvider>
   );
