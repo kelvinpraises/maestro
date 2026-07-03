@@ -63,6 +63,7 @@ import {
 import { requestPostNotice } from "@/hooks/use-family-board";
 import { useAllowanceDrip } from "@/hooks/use-allowance-drip";
 import { useCollectAllowance, type CollectStep } from "@/hooks/use-allowance";
+import { useAutoScoop } from "@/hooks/use-auto-scoop";
 import { classifyTxError } from "@/lib/tx-errors";
 import { useCountUp } from "@/hooks/use-count-up";
 
@@ -501,6 +502,12 @@ const SCOOP_COPY: Record<CollectStep, string> = {
  * pulsing droplet, and a "Scoop it up" button that runs the collect pipeline and
  * counts the balance up on success. Zero-allowance kids see it exactly as before
  * (no drip line, no scoop) — the whole card is a plain button to history.
+ *
+ * Money also comes in on its own: `useAutoScoop` quietly runs the SAME collect
+ * mutation once a meaningful amount is waiting (see the hook for the
+ * threshold/cooldown/visibility gates). Because auto + manual share one mutation,
+ * `collect.isPending` guards both — they can never run the pipeline at once. The
+ * manual button stays for the ritual; a subtle line tells the kid it's automatic.
  */
 function KidStashCard({
   stashBalance,
@@ -530,6 +537,18 @@ function KidStashCard({
 
   const waitingXlm = drip.waitingXlm;
   const canScoop = drip.hasIncoming && waitingXlm > 0 && !collect.isPending;
+
+  // Auto-scoop: pulls the allowance in on its own when a meaningful amount is
+  // waiting, driving the SAME `collect` mutation as the manual button — so
+  // `collect.isPending` guards both and they can never double-fire. Quiet by
+  // design: a brief note on success, an honest line only on a deterministic
+  // failure (a blip stays silent and retries next cooldown). No confetti.
+  const autoScoop = useAutoScoop({
+    collect,
+    waitingXlm,
+    payTo: publicKey,
+    enabled: !!publicKey,
+  });
 
   const runScoop = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -649,6 +668,35 @@ function KidStashCard({
                 "The bank line is busy. Your money is safe, try again in a moment."}
             </p>
           )}
+
+          {/* Quiet auto-scoop acknowledgement — fades on its own. Suppressed
+              while a manual scoop is mid-flow so the two never talk over each
+              other. No confetti; the balance count-up is the real celebration. */}
+          {autoScoop.justScooped && !scooping && step !== "error" && (
+            <p className="motion-safe:animate-fade-in-out mt-2 text-center text-[12px] font-bold text-m-green-ink/80 text-pretty">
+              Scooped your allowance in ✨
+            </p>
+          )}
+
+          {/* Deterministic auto-scoop failure only (a blip stays silent and
+              retries next cooldown). Never shown alongside the manual error. */}
+          {autoScoop.deterministicError && !scooping && step !== "error" && (
+            <p className="mt-2 text-center text-[12px] font-bold text-m-pink text-pretty">
+              {autoScoop.deterministicError}
+            </p>
+          )}
+
+          {/* Reassure the kid the button is optional — money arrives on its own.
+              Hidden while anything is happening so the active moment stays clean. */}
+          {waitingXlm > 0 &&
+            !scooping &&
+            step !== "error" &&
+            !autoScoop.justScooped &&
+            !autoScoop.deterministicError && (
+              <p className="mt-2 text-center text-[11px] font-bold text-m-green-ink/55 text-pretty">
+                This comes in on its own too. Tap if you like.
+              </p>
+            )}
         </div>
       )}
     </div>
