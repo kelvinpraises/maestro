@@ -54,6 +54,7 @@ import {
   noteFromClaimLink,
   importNote,
   randomId,
+  PARENT_SENDER_NAME,
   FAMILY_EVENT,
   type Family,
   type Chore,
@@ -61,6 +62,7 @@ import {
   type FeedEntry,
 } from "@/lib/family";
 import { deriveNote } from "@/lib/claims";
+import { ensureAccountFunded, alreadyFunded } from "@/lib/account";
 
 const POLL_MS = 8_000;
 /** Backoff schedule for a PUT that keeps 409-ing (bounded, then give up). */
@@ -205,8 +207,17 @@ function buildOutboundBoard(
 //  Merge IN — a verified board → the local stores.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Apply a verified board to local state. Returns true if anything changed. */
-function mergeIntoLocal(board: Board, family: Family): boolean {
+/** Apply a verified board to local state. Returns true if anything changed.
+ *  `onKidAddress` (when given) fires once per published kid address in the
+ *  verified view — the parent device uses it to bring the kid's Stellar account
+ *  into existence (createAccount + fund) before it's used as a reward recipient
+ *  or allowance target. It's called for every known address (the account helper
+ *  itself dedupes / no-ops when the account already exists). */
+function mergeIntoLocal(
+  board: Board,
+  family: Family,
+  onKidAddress?: (kidName: string, address: string) => void,
+): boolean {
   const view = verifyBoard(board, family.parentAddress);
   let changed = false;
 
@@ -255,7 +266,15 @@ function mergeIntoLocal(board: Board, family: Family): boolean {
   //    single-kid membership and skips this.
   const joinedNames: string[] = [];
   for (const [kidName, kid] of Object.entries(view.kids)) {
-    if (kid.address) setKidAddress(kidName, kid.address); // no-ops when unchanged
+    if (kid.address) {
+      setKidAddress(kidName, kid.address); // no-ops when unchanged
+      // Parent-side: this is where the parent LEARNS a kid's address. Bring the
+      // kid's account into existence (createAccount + fund) so a reward claim or
+      // allowance collect to it can actually transact. The callback is fired for
+      // every known address; ensureAccountFunded dedupes and no-ops when the
+      // account already exists, so this is safe to call on every poll.
+      onKidAddress?.(kidName, kid.address);
+    }
     joinedNames.push(kidName);
   }
   if (family.role === "parent" && joinedNames.length > 0) {
@@ -346,6 +365,20 @@ function structuredCloneSafe<T>(v: T): T {
  * Exposes `pushNow()` so mutation sites can nudge an immediate sync, and
  * `postNotice()` so flows (task #4) can drop a signed notice on the board.
  */
+/** A same-tab event fired when the parent starts/finishes bringing a kid's
+ *  Stellar account into existence, so a surface (dashboard) can show an honest
+ *  "Setting up Zuri's account…" line. Detail: { kidName, status }. */
+export const ACCOUNT_SETUP_EVENT = "maestro:account-setup";
+export interface AccountSetupDetail {
+  kidName: string;
+  status: "starting" | "created" | "exists" | "error";
+}
+function emitAccountSetup(detail: AccountSetupDetail): void {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(ACCOUNT_SETUP_EVENT, { detail }));
+  }
+}
+
 export function useFamilyBoard() {
   const { keypair, isReady } = useStellarWallet();
 
@@ -381,6 +414,51 @@ export function useFamilyBoard() {
     return { family, boardId: family.boardId, familyKey: family.familyKey };
   }, []);
 
+  /**
+   * Parent-side account bootstrap: when the merge surfaces a kid's published
+   * address, bring that account into existence (createAccount + 1 XLM) from the
+   * parent wallet so the kid can later submit a claim and receive an allowance.
+   * Fired for every known address; `alreadyFunded` short-circuits the common
+   * case with no network, and `ensureAccountFunded` itself is idempotent (checks
+   * on-chain, coalesces concurrent calls) so this is safe to invoke every poll.
+   * Only a PARENT device funds — a kid device never pays for accounts.
+   */
+  const ensureKidFunded = useCallback(
+    (kidName: string, address: string) => {
+      const family = loadFamily();
+      if (!family || family.role !== "parent") return;
+      if (alreadyFunded(address)) return; // fast path — nothing to announce
+      emitAccountSetup({ kidName, status: "starting" });
+      void ensureAccountFunded({ from: keypair, to: address })
+        .then((res) => {
+          if (res.kind === "created") {
+            emitAccountSetup({ kidName, status: "created" });
+            // A warm, attributable family-feed row — the parent set the kid up.
+            recordLocalNote({
+              kind: "message",
+              kidName: PARENT_SENDER_NAME,
+              text: `Set up ${kidName}'s account so rewards can land`,
+            });
+          } else if (res.kind === "exists") {
+            emitAccountSetup({ kidName, status: "exists" });
+          } else {
+            // Transient or deterministic — leave a breadcrumb; a later poll (or
+            // the parent topping up the bank) retries. No scary UI for the kid.
+            console.warn(
+              `[account] could not set up ${kidName}'s account:`,
+              res.detail,
+            );
+            emitAccountSetup({ kidName, status: "error" });
+          }
+        })
+        .catch((err) => {
+          console.warn(`[account] ensureAccountFunded threw for ${kidName}`, err);
+          emitAccountSetup({ kidName, status: "error" });
+        });
+    },
+    [keypair],
+  );
+
   /** One full pull: GET → decrypt → verify → merge into local. */
   const pull = useCallback(async (): Promise<Board | null> => {
     const c = coords();
@@ -395,9 +473,9 @@ export function useFamilyBoard() {
     }
     lastBoardRef.current = board;
     versionRef.current = rec.version;
-    mergeIntoLocal(board, c.family);
+    mergeIntoLocal(board, c.family, ensureKidFunded);
     return board;
-  }, [coords]);
+  }, [coords, ensureKidFunded]);
 
   /**
    * One full push: build the outbound board from local state + this device's
@@ -437,7 +515,7 @@ export function useFamilyBoard() {
           versionRef.current = nextVersion;
           pendingNoticesRef.current = []; // notices landed
           // Reflect our own just-pushed board back into local (e.g. notices feed).
-          mergeIntoLocal(outbound, family);
+          mergeIntoLocal(outbound, family, ensureKidFunded);
           return;
         }
         if (res.kind === "offline") return; // server down — try again next poll
@@ -447,7 +525,7 @@ export function useFamilyBoard() {
             const merged = await decryptBoard(res.current.blob, c.familyKey);
             lastBoardRef.current = merged;
             versionRef.current = res.current.version;
-            mergeIntoLocal(merged, family);
+            mergeIntoLocal(merged, family, ensureKidFunded);
           } catch {
             /* unreadable server record — bail, next poll recovers */
             return;
@@ -470,7 +548,7 @@ export function useFamilyBoard() {
         queueMicrotask(() => void pushRef.current?.());
       }
     }
-  }, [coords, keypair, pull]);
+  }, [coords, keypair, pull, ensureKidFunded]);
 
   // Hold the latest push in a ref so the coalesced re-run (inside push's own
   // finally) can call it without a self-reference at definition time.

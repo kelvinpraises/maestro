@@ -30,6 +30,16 @@ import {
 } from "@/lib/claims";
 import { xlmToStroops, stroopsToXlm } from "@/lib/allowance";
 import { classifyTxError, retryTransient } from "@/lib/tx-errors";
+import { accountExists } from "@/lib/account";
+
+/**
+ * Sentinel thrown when the kid's OWN wallet doesn't exist on-chain yet, so it
+ * can't pay the fee to submit the claim. This is NOT a money-tx failure — no tx
+ * was attempted — so it bypasses classifyTxError and gets its own kid-safe line
+ * ("ask your grown-up"). The parent's join-time account bootstrap normally
+ * prevents this; it covers the edge where a kid device is unfunded at claim time.
+ */
+const KID_ACCOUNT_MISSING = "maestro:kid-account-missing";
 
 // ── local note storage (demo-grade) ──────────────────────────────────────────
 
@@ -228,6 +238,23 @@ export function useClaimReward() {
       const amountStroops = BigInt(note.amountStroops);
       const derived = deriveNote(BigInt(note.secret), amountStroops);
 
+      // 0) The kid submits + pays the fee for this claim from THEIR OWN wallet.
+      //    If that wallet doesn't exist on-chain yet (unfunded — no base
+      //    reserve), the tx can't even be submitted. Catch it here with an
+      //    honest "ask your grown-up" instead of letting it fail deep in submit
+      //    and mislabel a fixable setup gap as a claim reject. The parent's
+      //    join-time account bootstrap normally covers this; this guards the edge
+      //    where the kid device is still unfunded. A transient network hiccup on
+      //    the existence check is ignored (we let the claim proceed and retry).
+      try {
+        if (!(await accountExists(publicKey))) {
+          throw new Error(KID_ACCOUNT_MISSING);
+        }
+      } catch (err) {
+        if (err instanceof Error && err.message === KID_ACCOUNT_MISSING) throw err;
+        // Existence check itself failed (network) — don't block the claim on it.
+      }
+
       // 1) Rebuild the tree from on-chain leaves (paginated, includes pre-existing).
       setStep("rebuilding");
       const tree = await rebuildTree(zwRead);
@@ -284,9 +311,14 @@ export function useClaimReward() {
   // Kid-safe, truthful copy for the failure card — distinguishes a genuine
   // network blip ("bank line is busy … try again") from a deterministic reject
   // (already claimed / not enough in the bank), rather than lying "try again" at
-  // something that can't succeed. Null until there's an error to describe.
+  // something that can't succeed. The account-missing sentinel gets its own line
+  // (no tx was attempted — it's a setup gap, not a money failure). Null until
+  // there's an error to describe.
   const errorMessage = mutation.error
-    ? classifyTxError(mutation.error, "claim").kidMessage
+    ? mutation.error instanceof Error &&
+      mutation.error.message === KID_ACCOUNT_MISSING
+      ? "Your account isn't set up yet. Ask your grown-up to finish setting it up, then try again."
+      : classifyTxError(mutation.error, "claim").kidMessage
     : null;
 
   return { ...mutation, step, reset, errorMessage };

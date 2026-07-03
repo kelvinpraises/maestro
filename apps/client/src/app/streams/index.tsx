@@ -14,6 +14,7 @@ import {
 } from "@phosphor-icons/react";
 import { cn } from "@/utils";
 import { useStellarWallet } from "@/providers/stellar-wallet-provider";
+import { ensureAccountFunded } from "@/lib/account";
 import { useFamily } from "@/hooks/use-family";
 import {
   getKidAddress,
@@ -51,9 +52,19 @@ type Recipient =
   | { kind: "address" };
 
 function AllowancePage() {
-  const { publicKey } = useStellarWallet();
+  const { publicKey, keypair } = useStellarWallet();
   const { family } = useFamily();
   const kidNames = family?.kidNames ?? [];
+
+  // Account bootstrap for a recipient that doesn't exist on-chain yet. A fresh
+  // or pasted G-address has no base reserve, so a stream to it would fail with
+  // op_no_destination. The parent (family bank) brings it into existence first.
+  //   • idle    — nothing to do
+  //   • setting — createAccount in flight ("Setting up their account…")
+  //   • error   — bank couldn't fund it (honest, retriable)
+  type SetupState = "idle" | "setting" | "error";
+  const [setupState, setSetupState] = useState<SetupState>("idle");
+  const [setupError, setSetupError] = useState<string | null>(null);
 
   // ── create form state ──────────────────────────────────────────────────────
   const [rate, setRate] = useState(2);
@@ -341,42 +352,77 @@ function AllowancePage() {
         <button
           type="button"
           disabled={
-            create.isPending || fundXlm <= 0 || rate <= 0 || !resolvedAddress
+            create.isPending ||
+            setupState === "setting" ||
+            fundXlm <= 0 ||
+            rate <= 0 ||
+            !resolvedAddress
           }
           onClick={() => {
             if (!resolvedAddress) return;
+            const target = resolvedAddress;
             // Remember a freshly-pasted kid address for next time (item 5).
             if (recipient.kind === "kid" && !knownKidAddress) {
-              setKidAddress(recipient.name, resolvedAddress);
+              setKidAddress(recipient.name, target);
             }
-            create.mutate(
-              { rate, period, fundXlm, recipient: resolvedAddress },
-              {
-                onSuccess: () => {
-                  // When the drip is aimed at a named kid, post an
-                  // allowance-started notice so their phone shows "Your allowance
-                  // is flowing". Myself/raw-address allowances post nothing (no
-                  // kid to notify).
-                  if (recipient.kind === "kid") {
-                    requestPostNotice({
-                      id: `allowance-${recipient.name}-${randomId()}`,
-                      at: Date.now(),
-                      kind: "allowance-started",
-                      kidName: recipient.name,
-                      rateXlm: rate,
-                      period,
-                    });
-                  }
+            // Bring the recipient's account into existence FIRST when it's not
+            // the parent's own wallet. A fresh/pasted address has no base reserve,
+            // so a stream to it would fail op_no_destination on collect. The
+            // parent (family bank) funds a createAccount (1 XLM), then we open the
+            // allowance. Myself → skip (the wallet already exists).
+            const startAllowance = () =>
+              create.mutate(
+                { rate, period, fundXlm, recipient: target },
+                {
+                  onSuccess: () => {
+                    // When the drip is aimed at a named kid, post an
+                    // allowance-started notice so their phone shows "Your
+                    // allowance is flowing". Myself/raw-address allowances post
+                    // nothing (no kid to notify).
+                    if (recipient.kind === "kid") {
+                      requestPostNotice({
+                        id: `allowance-${recipient.name}-${randomId()}`,
+                        at: Date.now(),
+                        kind: "allowance-started",
+                        kidName: recipient.name,
+                        rateXlm: rate,
+                        period,
+                      });
+                    }
+                  },
                 },
-              },
-            );
+              );
+
+            // Own wallet already exists → straight to the allowance.
+            if (recipient.kind === "myself" || target === publicKey) {
+              startAllowance();
+              return;
+            }
+            // Otherwise ensure the destination exists (createAccount + fund from
+            // the parent bank) before opening the stream, so collect can't fail
+            // op_no_destination. Idempotent — a known/existing account no-ops.
+            setSetupState("setting");
+            setSetupError(null);
+            void ensureAccountFunded({ from: keypair, to: target }).then((res) => {
+              if (res.kind === "exists" || res.kind === "created") {
+                setSetupState("idle");
+                startAllowance();
+              } else {
+                setSetupState("error");
+                setSetupError(
+                  res.transient
+                    ? "Couldn't reach the network to set up this account. Try again in a moment."
+                    : "This address isn't set up on Stellar yet and the family bank couldn't fund it. Top up the bank and try again.",
+                );
+              }
+            });
           }}
           className="press-pop flex h-13 w-full items-center justify-center gap-2 rounded-full border-2 border-m-ink bg-m-blue py-3.5 font-display text-base font-extrabold text-white shadow-[var(--m-pop)] hover:brightness-105 disabled:opacity-50"
         >
-          {create.isPending ? (
+          {create.isPending || setupState === "setting" ? (
             <>
               <SpinnerGapIcon className="size-5 animate-spin" weight="bold" />
-              Setting up…
+              {setupState === "setting" ? "Setting up their account…" : "Setting up…"}
             </>
           ) : (
             <>
@@ -385,6 +431,21 @@ function AllowancePage() {
             </>
           )}
         </button>
+        {setupState === "error" && setupError && (
+          <p className="text-center text-[13px] font-bold text-m-pink text-pretty">
+            {setupError}
+          </p>
+        )}
+        {/* A stream to a non-Maestro (pasted) address pays it, but that person
+            still needs their own tooling to withdraw a drips stream (receive →
+            split → collect). Surfaced honestly so nobody expects it to "just
+            arrive" in a wallet that isn't running Maestro. */}
+        {recipient.kind === "address" && !!resolvedAddress && (
+          <p className="text-center text-[12px] font-semibold text-muted-foreground text-pretty">
+            Heads up: a pasted address that isn&apos;t on Maestro still needs its
+            own tools to collect a stream.
+          </p>
+        )}
         {create.isSuccess && (
           <p className="text-center text-[13px] font-extrabold text-m-green-ink">
             Allowance is live. Money starts flowing in a few seconds! ✨
