@@ -11,8 +11,7 @@ out/
 .claude/
 .vscode/
 
-# design reference dump (kept local only)
-context/design-dump/
+context/
 
 # needed by builds despite the generic rules above:
 # proving artifacts (vkey embedded at compile time, zkey/wasm used by the prover)
