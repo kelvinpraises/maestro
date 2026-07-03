@@ -54,6 +54,8 @@ export const Route = createFileRoute("/allowance/")({
 });
 
 const PERIODS: { id: AllowancePeriod; label: string }[] = [
+  { id: "minute", label: "per minute" },
+  { id: "hour", label: "per hour" },
   { id: "day", label: "per day" },
   { id: "week", label: "per week" },
 ];
@@ -333,15 +335,16 @@ function AllowancePage() {
           </div>
         </div>
 
-        {/* Period toggle */}
-        <div className="flex gap-2">
+        {/* Period toggle — four paces (per minute is the fast, demo-friendly
+            drip). Chips wrap so the row stays comfortable on a narrow phone. */}
+        <div className="grid grid-cols-2 gap-2">
           {PERIODS.map((p) => (
             <button
               key={p.id}
               type="button"
               onClick={() => setPeriod(p.id)}
               className={cn(
-                "press-pop flex-1 rounded-2xl border-2 border-m-ink px-3 py-2.5 font-display text-sm font-extrabold",
+                "press-pop rounded-2xl border-2 border-m-ink px-3 py-2.5 font-display text-sm font-extrabold",
                 period === p.id
                   ? "bg-m-purple text-white shadow-[var(--m-pop-sm)]"
                   : "bg-card text-muted-foreground",

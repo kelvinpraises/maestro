@@ -31,20 +31,35 @@ export const CYCLE_SECS = 2;
 /** Cap on cycles pulled in a single `receive_streams` call (keeps footprint bounded). */
 export const MAX_RECEIVE_CYCLES = 50;
 
+const SECONDS_PER_MINUTE = 60n;
+const SECONDS_PER_HOUR = 3_600n;
 const SECONDS_PER_DAY = 86_400n;
 const SECONDS_PER_WEEK = 604_800n;
 
-export type AllowancePeriod = "day" | "week";
+export type AllowancePeriod = "minute" | "hour" | "day" | "week";
+
+/** Seconds in each allowance period — the divisor turning a rate into per-second. */
+const PERIOD_SECS: Record<AllowancePeriod, bigint> = {
+  minute: SECONDS_PER_MINUTE,
+  hour: SECONDS_PER_HOUR,
+  day: SECONDS_PER_DAY,
+  week: SECONDS_PER_WEEK,
+};
 
 /**
- * Convert a human allowance rate (XLM per day or per week) into the contract's
- * fixed-point `amt_per_sec`. Integer math throughout — no float rounding.
+ * Convert a human allowance rate (XLM per minute / hour / day / week) into the
+ * contract's fixed-point `amt_per_sec`. Integer math throughout — no float
+ * rounding.
  *
  * `amt_per_sec = (xlm * XLM_STROOPS / periodSecs) * AMT_PER_SEC_MULTIPLIER`
  * kept as one fraction so the multiplier absorbs the per-second remainder.
+ *
+ * The multiplier carries 1e9 of extra precision, so even a fast, small
+ * per-minute rate (e.g. 0.01 XLM/min = 100_000 stroops over 60s) stays a
+ * positive `amt_per_sec` and does not round to 0 stroops/sec.
  */
 export function amtPerSecFromRate(xlmPerPeriod: number, period: AllowancePeriod): bigint {
-  const periodSecs = period === "day" ? SECONDS_PER_DAY : SECONDS_PER_WEEK;
+  const periodSecs = PERIOD_SECS[period];
   // XLM → whole stroops (7 decimals), then fixed-point per-second rate. Keeping
   // the multiplier in the numerator lets it absorb the per-second remainder.
   const stroops = xlmToStroops(xlmPerPeriod);
