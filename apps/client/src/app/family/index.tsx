@@ -45,7 +45,7 @@ import {
 } from "@/components/molecules/dialog";
 import { cn } from "@/utils";
 import { useStellarWallet } from "@/providers/stellar-wallet-provider";
-import { useFamily, useFamilyFeed } from "@/hooks/use-family";
+import { useFamily, useFamilyFeed, useChoreStates } from "@/hooks/use-family";
 import { useFundReward } from "@/hooks/use-rewards";
 import { formatRelativeTime } from "@/utils";
 import {
@@ -505,6 +505,24 @@ function ChoresSection({
     toast.success("Chore added");
   };
 
+  // Split the chore list by this period's progress: a chore a kid has completed
+  // (fresh "done") drops out of the active list and into a struck-through "Done"
+  // group with who did it. Recurring chores come back on their own next period
+  // (effectiveChoreState freshness), so nothing piles up.
+  const { statesFor } = useChoreStates();
+  const { active, doneChores } = useMemo(() => {
+    const active: Chore[] = [];
+    const doneChores: { chore: Chore; doers: string[] }[] = [];
+    for (const c of family.chores) {
+      const doers = Object.entries(statesFor(c))
+        .filter(([, s]) => s === "done")
+        .map(([kid]) => kid);
+      if (doers.length > 0) doneChores.push({ chore: c, doers });
+      else active.push(c);
+    }
+    return { active, doneChores };
+  }, [family.chores, statesFor]);
+
   return (
     <section className="space-y-3">
       <div className="flex items-center justify-between px-1">
@@ -569,37 +587,80 @@ function ChoresSection({
           </p>
         </div>
       ) : (
-        <div className="space-y-2.5">
-          {family.chores.map((c) => (
-            <div key={c.id} className="flex items-center gap-3 card-pop p-3">
-              <EmojiTile emoji={c.emoji} tint="neutral" bordered />
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-display text-[15px] font-extrabold">
-                  {c.name}
-                </p>
-                {c.note && (
-                  <p className="truncate text-[12px] font-semibold text-muted-foreground">
-                    {c.note}
-                  </p>
-                )}
-                <p className="flex items-center gap-1.5 text-[13px] font-extrabold tabular-nums text-m-green-ink">
-                  {c.rewardXlm.toFixed(2)} XLM
-                  <span className="font-bold text-muted-foreground">
-                    · {c.assignee ?? "Anyone"}
-                    {c.repeat && c.repeat !== "daily" ? ` · ${c.repeat}` : ""}
-                  </span>
-                </p>
-              </div>
-              <button
-                type="button"
-                aria-label={`Remove ${c.name}`}
-                onClick={() => removeChore(c.id)}
-                className="press-pop flex size-9 items-center justify-center rounded-full border-2 border-m-ink bg-muted text-muted-foreground shadow-[var(--m-pop-sm)] hover:text-m-pink"
-              >
-                <TrashIcon className="size-4" weight="bold" />
-              </button>
+        <div className="space-y-4">
+          {/* Active — still to do or awaiting a grown-up's nod. */}
+          {active.length > 0 && (
+            <div className="space-y-2.5">
+              {active.map((c) => (
+                <div key={c.id} className="flex items-center gap-3 card-pop p-3">
+                  <EmojiTile emoji={c.emoji} tint="neutral" bordered />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-display text-[15px] font-extrabold">
+                      {c.name}
+                    </p>
+                    {c.note && (
+                      <p className="truncate text-[12px] font-semibold text-muted-foreground">
+                        {c.note}
+                      </p>
+                    )}
+                    <p className="flex items-center gap-1.5 text-[13px] font-extrabold tabular-nums text-m-green-ink">
+                      {c.rewardXlm.toFixed(2)} XLM
+                      <span className="font-bold text-muted-foreground">
+                        · {c.assignee ?? "Anyone"}
+                        {c.repeat && c.repeat !== "daily" ? ` · ${c.repeat}` : ""}
+                      </span>
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    aria-label={`Remove ${c.name}`}
+                    onClick={() => removeChore(c.id)}
+                    className="press-pop flex size-9 items-center justify-center rounded-full border-2 border-m-ink bg-muted text-muted-foreground shadow-[var(--m-pop-sm)] hover:text-m-pink"
+                  >
+                    <TrashIcon className="size-4" weight="bold" />
+                  </button>
+                </div>
+              ))}
             </div>
-          ))}
+          )}
+
+          {/* Done this period — struck through, with who did it. Recurring
+              chores come back on their own next period, so nothing piles up. */}
+          {doneChores.length > 0 && (
+            <div className="space-y-2.5">
+              <h3 className="flex items-center gap-1.5 px-1 text-microlabel text-muted-foreground">
+                <CheckCircleIcon
+                  className="size-4 text-m-green-ink"
+                  weight="fill"
+                />
+                Done
+              </h3>
+              {doneChores.map(({ chore: c, doers }) => (
+                <div
+                  key={c.id}
+                  className="flex items-center gap-3 card-pop bg-m-mint/30 p-3"
+                >
+                  <EmojiTile emoji={c.emoji} tint="green" bordered />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-display text-[15px] font-extrabold text-muted-foreground line-through">
+                      {c.name}
+                    </p>
+                    <p className="truncate text-[12px] font-bold text-m-green-ink">
+                      {doers.join(", ")} did it · {c.rewardXlm.toFixed(2)} XLM
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    aria-label={`Remove ${c.name}`}
+                    onClick={() => removeChore(c.id)}
+                    className="press-pop flex size-9 items-center justify-center rounded-full border-2 border-m-ink bg-muted text-muted-foreground shadow-[var(--m-pop-sm)] hover:text-m-pink"
+                  >
+                    <TrashIcon className="size-4" weight="bold" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </section>

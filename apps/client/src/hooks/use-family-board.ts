@@ -311,6 +311,29 @@ function mergeIntoLocal(
           window.dispatchEvent(new Event("maestro:reward-notes-changed"));
         changed = true;
       }
+
+      // The grown-up approved THIS chore (the reward-ready notice carries its
+      // id). A "done" is a PARENT action, but only a kid may author its own
+      // chore-state — verifyBoard trusts the kid's signature alone for its
+      // states, so the parent's "done" can't ride the board directly. We set it
+      // HERE on the kid instead: the chore then leaves this kid's list (no more
+      // "waiting for the grown-ups") and republishes done so the parent's
+      // /family reflects it too. Guarded: only flip a pending THIS kid is
+      // actually showing, and only when the approval isn't older than that
+      // pending, so a lingering notice can never eat a fresh "I did it" in a
+      // later period.
+      if (n.choreId) {
+        const cs = loadChoreStates();
+        const cur = cs[n.choreId]?.[me];
+        if (cur?.state === "pending" && n.at >= cur.at) {
+          (cs[n.choreId] ??= {})[me] = { state: "done", at: n.at };
+          saveChoreStates(cs);
+          recordDone(n.choreId, me, n.at);
+          emitChoreStatesChanged();
+          changed = true;
+        }
+      }
+
       // Record the "reward arrived" family-feed row exactly once per notice id.
       if (!seenLocalIds.has(n.id)) {
         recordLocalNote({
