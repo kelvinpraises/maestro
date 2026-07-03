@@ -35,7 +35,7 @@ Four Soroban contracts, plus the native XLM asset they settle in. All live on St
 
 | Contract | What it does | Address |
 | --- | --- | --- |
-| `zwerc20` | Shielded family treasury. Holds the funds, stores reward commitments, pays private claims. | `CB4NCPRKEW4PQVCE74SGS42OAEMV75ULJTYHHZDC5UOVXGOBEAJF6PJH` |
+| `zwtoken` | Shielded family treasury. Holds the funds, stores reward commitments, pays private claims. | `CB4NCPRKEW4PQVCE74SGS42OAEMV75ULJTYHHZDC5UOVXGOBEAJF6PJH` |
 | `groth16_verifier` | Checks the reward-claim proof on-chain. | `CAYENB4W7ALZPIPLAUPR64OSF47H52I5YL2QNKS5UUGRB65MNZBR7ZZE` |
 | `drips` | Allowance streaming. Money that flows second by second, split across one or more kids. | `CBKYQ357VMHM4RVM6QK2UO324RSM75DD66LGFAOCDGJZCOWSERSEKHVH` |
 | `yield_manager` | Puts idle pot money to work and tracks the growth separately. | `CAQKJBXQRRF4EUQWUZWHO2YBNUED6H5L5HTHAUZKBDZ2MCQTAF4DV2FB` |
@@ -50,7 +50,6 @@ apps/client      the phone-shaped web app (React, Vite)
 apps/contracts   the four Soroban contracts, the circuit, and deployments.testnet.env
 apps/packages    generated TypeScript clients for each contract
 apps/server      the encrypted family board relay
-context/         working notes, the design story, and the pitch (not shipped)
 deploy.sh        one-shot testnet deploy
 ```
 
