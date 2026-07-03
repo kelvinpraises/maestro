@@ -76,26 +76,23 @@ export const Route = createFileRoute("/dashboard")({
 // picking a color per chore.
 const CHORE_TINTS: QuestTint[] = ["blue", "purple", "pink", "green", "gold"];
 
-/** One chore joined with this device's local todo/pending/done state. */
+/** One chore joined with a stable tint (per-kid status is derived at render). */
 interface ChoreRow extends Chore {
   tint: QuestTint;
-  status: ChoreState;
 }
 
 function DashboardPage() {
-  // Chores come from the family store (shared via the invite link). Per-device
-  // kid progress (todo/pending/done) lives in chore-states.
+  // Chores come from the family store (shared via the invite link). Per-kid
+  // progress (todo/pending/done) lives in chore-states, freshness-derived.
   const { family, role } = useFamily();
-  const { states } = useChoreStates();
 
   const chores = useMemo<ChoreRow[]>(
     () =>
       (family?.chores ?? []).map((c, i) => ({
         ...c,
         tint: CHORE_TINTS[i % CHORE_TINTS.length],
-        status: states[c.id] ?? "todo",
       })),
-    [family, states],
+    [family],
   );
 
   // Parents see the team's-doing mirror; kids (and family-less devices, which the
@@ -162,10 +159,24 @@ function HomeHeader({
 function KidHome({ chores }: { chores: ChoreRow[] }) {
   const navigate = useNavigate();
   const { family } = useFamily();
-  const { setChoreState } = useChoreStates();
+  const { setChoreState, stateFor } = useChoreStates();
   const { publicKey, xlmBalance } = useStellarWallet();
 
   const kidName = family?.kidName?.trim() || "there";
+  // The name this kid device acts as when marking chores. Falls back to the
+  // greeting name so a kid device that somehow lacks a kidName still records.
+  const myName = family?.kidName?.trim() || kidName;
+
+  // A kid sees chores assigned to them or unassigned ("anyone"); chores owned by
+  // OTHER kids don't render here. Each row's status is this kid's own effective
+  // (freshness-derived) state.
+  const myChores = useMemo(
+    () =>
+      chores
+        .filter((c) => !c.assignee || c.assignee === myName)
+        .map((c) => ({ chore: c, status: stateFor(c, myName) })),
+    [chores, myName, stateFor],
+  );
 
   // Real XLM balance drives the stash card. Unfunded is a valid 0, not an error.
   const stashBalance = useMemo(
@@ -191,7 +202,7 @@ function KidHome({ chores }: { chores: ChoreRow[] }) {
       .reduce((sum, r) => sum + r.amountXlm, 0);
   }, [rewardViews]);
 
-  const choresLeft = chores.filter((c) => c.status !== "done").length;
+  const choresLeft = myChores.filter((c) => c.status !== "done").length;
 
   // The confirm-before-pending sheet: tapping a todo chore opens "I did it! ✋".
   const [confirmChore, setConfirmChore] = useState<ChoreRow | null>(null);
@@ -254,14 +265,14 @@ function KidHome({ chores }: { chores: ChoreRow[] }) {
             <SparkleIcon className="size-4 text-m-gold" weight="fill" />
             Today&apos;s Chores
           </h2>
-          {chores.length > 0 && (
+          {myChores.length > 0 && (
             <span className="rounded-full border-2 border-m-ink bg-primary/20 px-2.5 py-0.5 text-xs font-extrabold text-m-green-ink">
               {choresLeft} Left
             </span>
           )}
         </div>
 
-        {chores.length === 0 ? (
+        {myChores.length === 0 ? (
           <div className="card-pop bg-card/70 p-6 text-center">
             <IconTile
               icon={BroomIcon}
@@ -278,10 +289,11 @@ function KidHome({ chores }: { chores: ChoreRow[] }) {
           </div>
         ) : (
           <div className="space-y-2.5">
-            {chores.map((c) => (
+            {myChores.map(({ chore: c, status }) => (
               <ChoreRowKid
                 key={c.id}
                 chore={c}
+                status={status}
                 waitingFor={waitingFor}
                 onTapTodo={() => setConfirmChore(c)}
               />
@@ -326,7 +338,8 @@ function KidHome({ chores }: { chores: ChoreRow[] }) {
             </Button>
             <Button
               onClick={() => {
-                if (confirmChore) setChoreState(confirmChore.id, "pending");
+                if (confirmChore)
+                  setChoreState(confirmChore.id, myName, "pending");
                 setConfirmChore(null);
               }}
             >
@@ -342,14 +355,16 @@ function KidHome({ chores }: { chores: ChoreRow[] }) {
 /** One kid chore row: todo taps to confirm; pending shows a waiting badge. */
 function ChoreRowKid({
   chore,
+  status,
   waitingFor,
   onTapTodo,
 }: {
   chore: ChoreRow;
+  status: ChoreState;
   waitingFor: string;
   onTapTodo: () => void;
 }) {
-  if (chore.status === "pending") {
+  if (status === "pending") {
     return (
       <div className="animate-pop-in card-pop card-pop-sky flex w-full items-center gap-3.5 p-3">
         {chore.emoji ? (
@@ -384,8 +399,8 @@ function ChoreRowKid({
       emoji={chore.emoji}
       note={chore.note}
       tint={chore.tint}
-      status={chore.status}
-      onClick={chore.status === "todo" ? onTapTodo : undefined}
+      status={status}
+      onClick={status === "todo" ? onTapTodo : undefined}
     />
   );
 }
@@ -568,13 +583,13 @@ type NodStage = "idle" | "funding" | "funded" | "error";
 /** One "Needs your nod" card with its own pay-on-approve loop. */
 function NodCard({
   chore,
-  soleKid,
+  kidName,
   kidLivesHere,
   onDismiss,
   onPaid,
 }: {
   chore: ChoreRow;
-  soleKid: string | null;
+  kidName: string;
   kidLivesHere: boolean;
   onDismiss: () => void;
   onPaid: () => void;
@@ -621,7 +636,7 @@ function NodCard({
     );
   };
 
-  const kidLabel = soleKid ?? "your kid";
+  const kidLabel = kidName || "your kid";
 
   // ── funded: the reward is hidden; offer the hand-off ─────────────────────────
   if (stage === "funded") {
@@ -685,7 +700,7 @@ function NodCard({
             {chore.name}
           </p>
           <p className="text-[13px] font-bold text-muted-foreground">
-            {soleKid ? `${soleKid} says it's done` : "Marked done"}
+            {`${kidName} says it's done`}
             {" · "}
             <span className="font-extrabold tabular-nums text-m-green-ink">
               {chore.rewardXlm.toFixed(2)} XLM
@@ -734,21 +749,34 @@ function NodCard({
 function ParentHome({ chores }: { chores: ChoreRow[] }) {
   const navigate = useNavigate();
   const { family } = useFamily();
-  const { setChoreState } = useChoreStates();
+  const { setChoreState, statesFor } = useChoreStates();
 
   const familyName = family?.name?.trim() || "your family";
-  // One kid → attribute pending chores to them; otherwise stay generic.
-  const soleKid =
-    family && family.kidNames.length === 1 ? family.kidNames[0] : null;
 
-  // Funding a nod flips the chore to "done" (so it celebrates on the kid's home),
-  // but the parent still needs the funded card's hand-off (copy link / add to
-  // stash). So we keep any chore we just funded in the nod queue until the parent
-  // dismisses it — the pending filter alone would yank the card mid-hand-off.
+  // Funding a nod marks that kid's entry "done" (so it celebrates on the kid's
+  // home), but the parent still needs the funded card's hand-off (copy link /
+  // add to stash). So we keep any (chore, kid) we just funded in the nod queue
+  // until the parent dismisses it — the pending filter alone would yank the card
+  // mid-hand-off. Keyed per chore+kid ("choreId::kidName").
   const [justFunded, setJustFunded] = useState<Set<string>>(new Set());
-  const nodChores = chores.filter(
-    (c) => c.status === "pending" || justFunded.has(c.id),
-  );
+  const nodKey = (choreId: string, kid: string) => `${choreId}::${kid}`;
+
+  // The nod queue: one card per (chore, kid) with a fresh pending entry — for
+  // ANY number of kids ("Zuri says it's done", "Kofi says it's done"). Plus any
+  // (chore, kid) we just funded (held for the hand-off).
+  const nodEntries = useMemo(() => {
+    const out: { chore: ChoreRow; kidName: string }[] = [];
+    for (const c of chores) {
+      // statesFor returns fresh pending/done per kid. A just-funded entry is
+      // "done" here but stays in the queue via justFunded until dismissed.
+      for (const [kid, st] of Object.entries(statesFor(c))) {
+        if (st === "pending" || justFunded.has(nodKey(c.id, kid))) {
+          out.push({ chore: c, kidName: kid });
+        }
+      }
+    }
+    return out;
+  }, [chores, statesFor, justFunded]);
   const hasKids = (family?.kidNames.length ?? 0) > 0;
 
   // Same-device demo reality (DESIGN-STORY §5, step 5): in the demo, the parent
@@ -770,8 +798,9 @@ function ParentHome({ chores }: { chores: ChoreRow[] }) {
         subtitle="Here's how the team is doing."
       />
 
-      {/* Needs your nod — approvals FIRST when non-empty. */}
-      {nodChores.length > 0 && (
+      {/* Needs your nod — approvals FIRST when non-empty. One card per (chore,
+          kid): "Zuri says it's done" and "Kofi says it's done" stand apart. */}
+      {nodEntries.length > 0 && (
         <section className="space-y-3">
           <div className="flex items-center justify-between px-1">
             <h2 className="flex items-center gap-1.5 font-display text-lg font-extrabold">
@@ -779,29 +808,30 @@ function ParentHome({ chores }: { chores: ChoreRow[] }) {
               Needs your nod
             </h2>
             <span className="rounded-full border-2 border-m-ink bg-primary/20 px-2.5 py-0.5 text-xs font-extrabold text-m-green-ink">
-              {nodChores.length}
+              {nodEntries.length}
             </span>
           </div>
           <div className="space-y-2.5">
-            {nodChores.map((c) => (
+            {nodEntries.map(({ chore: c, kidName: kid }) => (
               <NodCard
-                key={c.id}
+                key={nodKey(c.id, kid)}
                 chore={c}
-                soleKid={soleKid}
+                kidName={kid}
                 kidLivesHere={kidLivesHere}
                 onDismiss={() => {
-                  // Dismiss from a not-yet-funded card = send it back to todo.
+                  // Dismiss a not-yet-funded card = clear THAT kid's entry (→ todo).
                   // Dismiss ("Done") after funding = just drop it from the queue.
-                  if (!justFunded.has(c.id)) setChoreState(c.id, "todo");
+                  if (!justFunded.has(nodKey(c.id, kid)))
+                    setChoreState(c.id, kid, null);
                   setJustFunded((s) => {
                     const next = new Set(s);
-                    next.delete(c.id);
+                    next.delete(nodKey(c.id, kid));
                     return next;
                   });
                 }}
                 onPaid={() => {
-                  setChoreState(c.id, "done");
-                  setJustFunded((s) => new Set(s).add(c.id));
+                  setChoreState(c.id, kid, "done");
+                  setJustFunded((s) => new Set(s).add(nodKey(c.id, kid)));
                 }}
               />
             ))}

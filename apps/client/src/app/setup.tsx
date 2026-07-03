@@ -45,7 +45,7 @@ import { cn } from "@/utils";
 import { toast } from "sonner";
 import { useStellarWallet } from "@/providers/stellar-wallet-provider";
 import { useFamily } from "@/hooks/use-family";
-import { loadFamily, randomId } from "@/lib/family";
+import { loadFamily, randomId, type ChoreRepeat } from "@/lib/family";
 
 export const Route = createFileRoute("/setup")({
   // Setup is for a device with no family yet; if one exists, go home.
@@ -69,6 +69,10 @@ interface Suggestion {
   defaultOn?: boolean;
   /** Optional context ("how it's done, who's involved"), for custom chores. */
   note?: string;
+  /** Who owns it (kidName); absent = "anyone". Custom chores only. */
+  assignee?: string;
+  /** Repeat cadence; absent = "daily". Custom chores only. */
+  repeat?: ChoreRepeat;
 }
 
 // Copy caps (mirror the family add-chore dialog).
@@ -153,6 +157,9 @@ function SetupPage() {
         emoji: c.emoji, // kept so it rides the invite link to kid devices
         rewardXlm: c.rewardXlm,
         ...(c.note?.trim() ? { note: c.note.trim() } : {}),
+        // Omit defaults: absent assignee = "anyone", absent repeat = "daily".
+        ...(c.assignee ? { assignee: c.assignee } : {}),
+        ...(c.repeat && c.repeat !== "daily" ? { repeat: c.repeat } : {}),
       }));
     createFamily({
       name: familyName.trim(),
@@ -210,6 +217,7 @@ function SetupPage() {
           {step === 2 && (
             <StepChores
               chores={allChores}
+              kids={kids}
               selected={selected}
               toggle={toggle}
               onAddCustom={(c) => {
@@ -377,11 +385,13 @@ function StepKids({
 
 function StepChores({
   chores,
+  kids,
   selected,
   toggle,
   onAddCustom,
 }: {
   chores: Suggestion[];
+  kids: string[];
   selected: Set<string>;
   toggle: (key: string) => void;
   onAddCustom: (c: Suggestion) => void;
@@ -432,25 +442,41 @@ function StepChores({
         })}
       </div>
 
-      <AddCustomChore onAdd={onAddCustom} />
+      <AddCustomChore kids={kids} onAdd={onAddCustom} />
     </div>
   );
 }
 
 const CUSTOM_EMOJI = ["✨", "🧺", "🌱", "🧼", "🚿", "🎒", "🧦", "🪥"];
 
-function AddCustomChore({ onAdd }: { onAdd: (c: Suggestion) => void }) {
+const REPEAT_CHIPS: { id: ChoreRepeat; label: string }[] = [
+  { id: "daily", label: "Daily" },
+  { id: "weekly", label: "Weekly" },
+  { id: "once", label: "Once" },
+];
+
+function AddCustomChore({
+  kids,
+  onAdd,
+}: {
+  kids: string[];
+  onAdd: (c: Suggestion) => void;
+}) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [emoji, setEmoji] = useState(CUSTOM_EMOJI[0]);
   const [reward, setReward] = useState(0.5);
   const [note, setNote] = useState("");
+  const [assignee, setAssignee] = useState<string | undefined>(undefined);
+  const [repeat, setRepeat] = useState<ChoreRepeat>("daily");
 
   const reset = () => {
     setName("");
     setEmoji(CUSTOM_EMOJI[0]);
     setReward(0.5);
     setNote("");
+    setAssignee(undefined);
+    setRepeat("daily");
   };
 
   const submit = () => {
@@ -466,6 +492,8 @@ function AddCustomChore({ onAdd }: { onAdd: (c: Suggestion) => void }) {
       icon: SparkleIcon,
       tint: "gold",
       note: note.trim() || undefined,
+      assignee,
+      repeat,
     });
     reset();
     setOpen(false);
@@ -550,6 +578,64 @@ function AddCustomChore({ onAdd }: { onAdd: (c: Suggestion) => void }) {
                   <span aria-hidden>{e}</span>
                 </button>
               ))}
+            </div>
+          </div>
+          <div>
+            <Label className="mb-2">Who does it?</Label>
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                onClick={() => setAssignee(undefined)}
+                className={cn(
+                  "press-pop rounded-full border-2 px-3.5 py-1.5 font-display text-[13px] font-extrabold",
+                  !assignee
+                    ? "border-m-ink bg-primary text-primary-foreground shadow-[var(--m-pop-sm)]"
+                    : "border-m-ink/25 bg-card text-muted-foreground",
+                )}
+              >
+                Anyone
+              </button>
+              {kids.map((k) => {
+                const on = assignee === k;
+                return (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => setAssignee(k)}
+                    className={cn(
+                      "press-pop rounded-full border-2 px-3.5 py-1.5 font-display text-[13px] font-extrabold",
+                      on
+                        ? "border-m-ink bg-primary text-primary-foreground shadow-[var(--m-pop-sm)]"
+                        : "border-m-ink/25 bg-card text-muted-foreground",
+                    )}
+                  >
+                    {k}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div>
+            <Label className="mb-2">How often?</Label>
+            <div className="flex gap-1.5">
+              {REPEAT_CHIPS.map((r) => {
+                const on = repeat === r.id;
+                return (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => setRepeat(r.id)}
+                    className={cn(
+                      "press-pop flex-1 rounded-full border-2 px-3 py-1.5 font-display text-[13px] font-extrabold",
+                      on
+                        ? "border-m-ink bg-primary text-primary-foreground shadow-[var(--m-pop-sm)]"
+                        : "border-m-ink/25 bg-card text-muted-foreground",
+                    )}
+                  >
+                    {r.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
           <div>

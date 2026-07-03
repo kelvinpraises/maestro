@@ -53,7 +53,12 @@ import {
   type HistoryItem,
 } from "@/hooks/use-treasury-history";
 import { formatRelativeTime, truncateAddress } from "@/utils";
-import { buildInviteLink, buildClaimLink, type Chore } from "@/lib/family";
+import {
+  buildInviteLink,
+  buildClaimLink,
+  type Chore,
+  type ChoreRepeat,
+} from "@/lib/family";
 
 // The three parent groups. `?g=kids` deep-links straight to the Kids group so
 // the home screen's kid chips can land here (dead-affordance fix, item 4).
@@ -230,6 +235,94 @@ function ParentView({
 
 // ── the add/edit-chore dialog body (shared shape; title cap + optional note) ──
 
+const REPEAT_CHIPS: { id: ChoreRepeat; label: string }[] = [
+  { id: "daily", label: "Daily" },
+  { id: "weekly", label: "Weekly" },
+  { id: "once", label: "Once" },
+];
+
+/**
+ * Assignee ("Anyone" or a kid) + repeat (Daily/Weekly/Once) chip rows, shared by
+ * the family + setup add-chore dialogs. Assignee is a kidName or undefined
+ * ("anyone"); repeat defaults to "daily".
+ */
+function ChoreAssignFields({
+  kidNames,
+  assignee,
+  setAssignee,
+  repeat,
+  setRepeat,
+}: {
+  kidNames: string[];
+  assignee: string | undefined;
+  setAssignee: (v: string | undefined) => void;
+  repeat: ChoreRepeat;
+  setRepeat: (v: ChoreRepeat) => void;
+}) {
+  return (
+    <>
+      <div>
+        <Label className="mb-2">Who does it?</Label>
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            onClick={() => setAssignee(undefined)}
+            className={cn(
+              "press-pop rounded-full border-2 px-3.5 py-1.5 font-display text-[13px] font-extrabold",
+              !assignee
+                ? "border-m-ink bg-primary text-primary-foreground shadow-[var(--m-pop-sm)]"
+                : "border-m-ink/25 bg-card text-muted-foreground",
+            )}
+          >
+            Anyone
+          </button>
+          {kidNames.map((k) => {
+            const on = assignee === k;
+            return (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setAssignee(k)}
+                className={cn(
+                  "press-pop rounded-full border-2 px-3.5 py-1.5 font-display text-[13px] font-extrabold",
+                  on
+                    ? "border-m-ink bg-primary text-primary-foreground shadow-[var(--m-pop-sm)]"
+                    : "border-m-ink/25 bg-card text-muted-foreground",
+                )}
+              >
+                {k}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div>
+        <Label className="mb-2">How often?</Label>
+        <div className="flex gap-1.5">
+          {REPEAT_CHIPS.map((r) => {
+            const on = repeat === r.id;
+            return (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => setRepeat(r.id)}
+                className={cn(
+                  "press-pop flex-1 rounded-full border-2 px-3 py-1.5 font-display text-[13px] font-extrabold",
+                  on
+                    ? "border-m-ink bg-primary text-primary-foreground shadow-[var(--m-pop-sm)]"
+                    : "border-m-ink/25 bg-card text-muted-foreground",
+                )}
+              >
+                {r.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </>
+  );
+}
+
 function ChoreDialogFields({
   name,
   setName,
@@ -239,6 +332,11 @@ function ChoreDialogFields({
   setReward,
   note,
   setNote,
+  kidNames,
+  assignee,
+  setAssignee,
+  repeat,
+  setRepeat,
   onSubmit,
 }: {
   name: string;
@@ -249,6 +347,11 @@ function ChoreDialogFields({
   setReward: (fn: (v: number) => number) => void;
   note: string;
   setNote: (v: string) => void;
+  kidNames: string[];
+  assignee: string | undefined;
+  setAssignee: (v: string | undefined) => void;
+  repeat: ChoreRepeat;
+  setRepeat: (v: ChoreRepeat) => void;
   onSubmit: () => void;
 }) {
   const overCounter = name.length >= TITLE_COUNTER_AT;
@@ -306,6 +409,13 @@ function ChoreDialogFields({
           onKeyDown={(e) => e.key === "Enter" && onSubmit()}
         />
       </div>
+      <ChoreAssignFields
+        kidNames={kidNames}
+        assignee={assignee}
+        setAssignee={setAssignee}
+        repeat={repeat}
+        setRepeat={setRepeat}
+      />
       <div>
         <Label className="mb-2">Reward (XLM)</Label>
         <div className="flex items-center gap-2">
@@ -348,12 +458,16 @@ function ChoresSection({
   const [emoji, setEmoji] = useState(EMOJI_CHOICES[0]);
   const [reward, setReward] = useState(1);
   const [note, setNote] = useState("");
+  const [assignee, setAssignee] = useState<string | undefined>(undefined);
+  const [repeat, setRepeat] = useState<ChoreRepeat>("daily");
 
   const reset = () => {
     setName("");
     setEmoji(EMOJI_CHOICES[0]);
     setReward(1);
     setNote("");
+    setAssignee(undefined);
+    setRepeat("daily");
   };
 
   const handleAdd = () => {
@@ -366,6 +480,9 @@ function ChoresSection({
       emoji,
       rewardXlm: reward,
       note: note.trim() || undefined,
+      // Omit defaults: undefined assignee = "anyone", "daily" = default repeat.
+      ...(assignee ? { assignee } : {}),
+      ...(repeat !== "daily" ? { repeat } : {}),
     });
     reset();
     setOpen(false);
@@ -407,6 +524,11 @@ function ChoresSection({
               setReward={setReward}
               note={note}
               setNote={setNote}
+              kidNames={family.kidNames}
+              assignee={assignee}
+              setAssignee={setAssignee}
+              repeat={repeat}
+              setRepeat={setRepeat}
               onSubmit={handleAdd}
             />
             <DialogFooter>
@@ -444,8 +566,12 @@ function ChoresSection({
                     {c.note}
                   </p>
                 )}
-                <p className="text-[13px] font-extrabold tabular-nums text-m-green-ink">
+                <p className="flex items-center gap-1.5 text-[13px] font-extrabold tabular-nums text-m-green-ink">
                   {c.rewardXlm.toFixed(2)} XLM
+                  <span className="font-bold text-muted-foreground">
+                    · {c.assignee ?? "Anyone"}
+                    {c.repeat && c.repeat !== "daily" ? ` · ${c.repeat}` : ""}
+                  </span>
                 </p>
               </div>
               <button

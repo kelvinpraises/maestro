@@ -16,12 +16,15 @@ import {
   saveChoreStates,
   emitFamilyChanged,
   emitChoreStatesChanged,
+  effectiveChoreState,
   FAMILY_EVENT,
   CHORE_STATE_EVENT,
   randomId,
   type Family,
   type Chore,
   type ChoreState,
+  type ChoreStates,
+  type ChoreStateEntry,
   type InvitePayload,
 } from "@/lib/family";
 
@@ -139,10 +142,17 @@ export function useFamily() {
   };
 }
 
-// ── useChoreStates — per-device kid chore progress (todo/pending/done) ────────
+// ── useChoreStates — per-kid chore progress (todo/pending/done), attributed ───
+//
+// v2 keys state by [choreId][kidName] = {state, at}. "todo" is the ABSENCE of a
+// fresh entry, and freshness is derived at render from the chore's repeat
+// cadence (effectiveChoreState) — a stale entry reads as todo again.
+
+/** Per-kid effective state of a chore: { [kidName]: "pending" | "done" }. */
+export type ChoreKidStates = Record<string, ChoreState>;
 
 export function useChoreStates() {
-  const [states, setStates] = useState<Record<string, ChoreState>>(() =>
+  const [states, setStates] = useState<ChoreStates>(() =>
     typeof window === "undefined" ? {} : loadChoreStates(),
   );
 
@@ -156,12 +166,59 @@ export function useChoreStates() {
     };
   }, []);
 
-  const setChoreState = useCallback((choreId: string, state: ChoreState) => {
-    const next = { ...loadChoreStates(), [choreId]: state };
-    saveChoreStates(next);
-    emitChoreStatesChanged();
-    setStates(next);
-  }, []);
+  /**
+   * Set (or clear) one kid's state for one chore. `state === null` clears the
+   * entry entirely (→ todo). Setting stamps `at = now` so freshness resets.
+   */
+  const setChoreState = useCallback(
+    (choreId: string, kidName: string, state: ChoreState | null) => {
+      const name = kidName.trim();
+      if (!name) return;
+      const cur = loadChoreStates();
+      const forChore = { ...(cur[choreId] ?? {}) };
+      if (state === null || state === "todo") {
+        delete forChore[name];
+      } else {
+        forChore[name] = { state, at: Date.now() };
+      }
+      const next: ChoreStates = { ...cur, [choreId]: forChore };
+      // Prune an emptied chore map so absence stays clean.
+      if (Object.keys(forChore).length === 0) delete next[choreId];
+      saveChoreStates(next);
+      emitChoreStatesChanged();
+      setStates(next);
+    },
+    [],
+  );
 
-  return { states, setChoreState };
+  /**
+   * The effective per-kid states for a chore at render time, freshness-derived
+   * from the chore's repeat cadence. Only kids with a fresh pending/done entry
+   * appear; everyone else is (absent =) todo.
+   */
+  const statesFor = useCallback(
+    (chore: Pick<Chore, "id" | "repeat">, now: number = Date.now()): ChoreKidStates => {
+      const forChore = states[chore.id] ?? {};
+      const out: ChoreKidStates = {};
+      for (const [kidName, entry] of Object.entries(forChore)) {
+        const eff = effectiveChoreState(chore, entry as ChoreStateEntry, now);
+        if (eff !== "todo") out[kidName] = eff;
+      }
+      return out;
+    },
+    [states],
+  );
+
+  /** One kid's effective state for a chore (todo when absent/stale). */
+  const stateFor = useCallback(
+    (
+      chore: Pick<Chore, "id" | "repeat">,
+      kidName: string,
+      now: number = Date.now(),
+    ): ChoreState =>
+      effectiveChoreState(chore, states[chore.id]?.[kidName.trim()], now),
+    [states],
+  );
+
+  return { states, setChoreState, statesFor, stateFor };
 }

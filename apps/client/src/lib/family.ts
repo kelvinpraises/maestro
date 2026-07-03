@@ -24,6 +24,9 @@ import type { ClaimNote } from "@/lib/claims";
 
 export type FamilyRole = "parent" | "kid";
 
+/** How often a chore comes back. Absent = "daily" (the default). */
+export type ChoreRepeat = "daily" | "weekly" | "once";
+
 /** One chore the parent defined. Reward is stored as an XLM number for display. */
 export interface Chore {
   /** Stable local id. */
@@ -41,10 +44,36 @@ export interface Chore {
    * links without it keep decoding fine.
    */
   note?: string;
+  /**
+   * Who owns this chore: a kidName, or ABSENT for "anyone" (first-claim, shared
+   * — "whoever empties the dishwasher"). A chore assigned to a kid only shows on
+   * that kid's home; anyone-chores show on every kid's home. Travels in the
+   * invite link; omitted when absent so old/anyone links stay compact.
+   */
+  assignee?: string;
+  /**
+   * How often the chore resets. ABSENT = "daily". Freshness is derived at render
+   * from each state entry's `at` timestamp (no scheduler) — see
+   * effectiveChoreState. Travels in the invite link; omitted when "daily".
+   */
+  repeat?: ChoreRepeat;
 }
 
-/** A kid's local state for a chore (per kid device). */
+/** A kid's local state for a chore. "todo" is the ABSENCE of a fresh entry. */
 export type ChoreState = "todo" | "pending" | "done";
+
+/**
+ * One stored state entry for a (chore, kid) pair. Only "pending"/"done" are
+ * ever stored — "todo" is the absence of a (fresh) entry. `at` is the unix-ms
+ * moment the state was set, which drives freshness derivation.
+ */
+export interface ChoreStateEntry {
+  state: "pending" | "done";
+  at: number;
+}
+
+/** v2 per-kid chore states: { [choreId]: { [kidName]: ChoreStateEntry } }. */
+export type ChoreStates = Record<string, Record<string, ChoreStateEntry>>;
 
 /**
  * The family membership stored on this device. A device with no family sees the
@@ -75,8 +104,10 @@ export interface Family {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const FAMILY_STORAGE_KEY = "maestro.family.v1";
-/** Per-kid chore states: { [choreId]: ChoreState }. */
-export const CHORE_STATE_STORAGE_KEY = "maestro.chore-states.v1";
+/** Legacy flat states: { [choreId]: ChoreState }. Migrated → v2 on first load. */
+export const CHORE_STATE_STORAGE_KEY_V1 = "maestro.chore-states.v1";
+/** Per-kid chore states: { [choreId]: { [kidName]: {state, at} } }. */
+export const CHORE_STATE_STORAGE_KEY = "maestro.chore-states.v2";
 
 /** Same storage key + shape use-rewards reads (see NOTES_STORAGE_KEY there). */
 export const NOTES_STORAGE_KEY = "maestro.reward-notes.v1";
@@ -112,23 +143,145 @@ export function clearFamily(): void {
   }
 }
 
-export function loadChoreStates(): Record<string, ChoreState> {
+/**
+ * One-time v1 → v2 migration. If the flat v1 map exists and v2 doesn't yet,
+ * lift each v1 entry under a single kid name:
+ *   • kid device  → the device's own kid (family.kidName)
+ *   • parent device with exactly one kid → that sole kid
+ *   • otherwise (parent, 0 or ≥2 kids) → drop (no way to attribute honestly)
+ * "todo" v1 entries carry no meaning under v2 (todo = absence), so only
+ * pending/done are lifted. v1 is deleted afterwards regardless.
+ */
+function migrateChoreStatesV1(): ChoreStates | null {
+  let rawV1: string | null;
   try {
+    rawV1 = localStorage.getItem(CHORE_STATE_STORAGE_KEY_V1);
+  } catch {
+    return null;
+  }
+  if (rawV1 == null) return null;
+  // Only migrate when v2 is genuinely absent (never clobber a real v2 map).
+  let hasV2 = false;
+  try {
+    hasV2 = localStorage.getItem(CHORE_STATE_STORAGE_KEY) != null;
+  } catch {
+    /* ignore */
+  }
+
+  const next: ChoreStates = {};
+  if (!hasV2) {
+    // Find the kid name to attribute lifted entries to.
+    const fam = loadFamily();
+    const attributeTo =
+      fam?.role === "kid"
+        ? fam.kidName?.trim() || null
+        : fam && fam.kidNames.length === 1
+          ? fam.kidNames[0]
+          : null;
+    if (attributeTo) {
+      try {
+        const v1 = JSON.parse(rawV1) as Record<string, ChoreState>;
+        if (v1 && typeof v1 === "object") {
+          const at = Date.now();
+          for (const [choreId, state] of Object.entries(v1)) {
+            if (state === "pending" || state === "done") {
+              next[choreId] = { [attributeTo]: { state, at } };
+            }
+          }
+        }
+      } catch {
+        /* corrupt v1 — drop it */
+      }
+    }
+    try {
+      localStorage.setItem(CHORE_STATE_STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      /* ignore */
+    }
+  }
+  // Delete v1 either way — its job is done.
+  try {
+    localStorage.removeItem(CHORE_STATE_STORAGE_KEY_V1);
+  } catch {
+    /* ignore */
+  }
+  return hasV2 ? null : next;
+}
+
+export function loadChoreStates(): ChoreStates {
+  try {
+    const migrated = migrateChoreStatesV1();
+    if (migrated) return migrated;
     const raw = localStorage.getItem(CHORE_STATE_STORAGE_KEY);
     if (!raw) return {};
-    const parsed = JSON.parse(raw) as Record<string, ChoreState>;
+    const parsed = JSON.parse(raw) as ChoreStates;
     return parsed && typeof parsed === "object" ? parsed : {};
   } catch {
     return {};
   }
 }
 
-export function saveChoreStates(states: Record<string, ChoreState>): void {
+export function saveChoreStates(states: ChoreStates): void {
   try {
     localStorage.setItem(CHORE_STATE_STORAGE_KEY, JSON.stringify(states));
   } catch {
     /* ignore */
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Freshness — derived at render, no scheduler. A stored pending/done entry
+//  only "counts" for the current period of the chore's repeat cadence; once the
+//  period rolls over, the entry is stale and the chore reads as todo again.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Local calendar-day key ("2026-07-03") for a unix-ms instant. */
+function dayKey(ms: number): string {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+/** ISO week key ("2026-W27") for a unix-ms instant (Mon-anchored). */
+function isoWeekKey(ms: number): string {
+  const d = new Date(ms);
+  // Copy to UTC-ish midnight and shift to Thursday of the current week.
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = (date.getUTCDay() + 6) % 7; // Mon=0 … Sun=6
+  date.setUTCDate(date.getUTCDate() - dayNum + 3);
+  const firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
+  const week =
+    1 +
+    Math.round(
+      ((date.getTime() - firstThursday.getTime()) / 86400000 -
+        3 +
+        ((firstThursday.getUTCDay() + 6) % 7)) /
+        7,
+    );
+  return `${date.getUTCFullYear()}-W${week}`;
+}
+
+/**
+ * The effective state of a chore for one kid at time `now`, given that kid's
+ * stored entry (or undefined). Returns "todo" when there's no entry OR the entry
+ * is stale for the chore's repeat cadence:
+ *   • daily  (default) — entry counts only on the same local calendar day.
+ *   • weekly           — entry counts only within the same ISO week.
+ *   • once             — entry counts forever.
+ * A stale entry reads as todo (and may be overwritten by a fresh action).
+ */
+export function effectiveChoreState(
+  chore: Pick<Chore, "repeat">,
+  entry: ChoreStateEntry | undefined,
+  now: number = Date.now(),
+): ChoreState {
+  if (!entry) return "todo";
+  const repeat = chore.repeat ?? "daily";
+  if (repeat === "once") return entry.state;
+  const fresh =
+    repeat === "weekly"
+      ? isoWeekKey(entry.at) === isoWeekKey(now)
+      : dayKey(entry.at) === dayKey(now);
+  return fresh ? entry.state : "todo";
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -226,16 +379,23 @@ export interface InvitePayload {
 }
 
 /**
- * Compact wire form — short keys; chores as tuples. The chore tuple is
- * [id, name, emoji, rewardXlm] with an OPTIONAL trailing `note` element:
- *   [id, name, emoji, rewardXlm]          ← old links (no note)
- *   [id, name, emoji, rewardXlm, note]    ← new links (note present)
- * The 5th element is omitted when the note is empty, so encoded links stay as
- * small as before, and decode tolerates its absence (old links keep working).
+ * Compact wire form — short keys; chores as positional tuples. Growth is
+ * append-only and default-eliding, so every older link shape still decodes:
+ *   [id, name, emoji, rewardXlm]                       ← oldest (4-tuple)
+ *   [id, name, emoji, rewardXlm, note]                 ← + note (5-tuple)
+ *   [id, name, emoji, rewardXlm, note, assignee]       ← + assignee (6-tuple)
+ *   [id, name, emoji, rewardXlm, note, assignee, rep]  ← + repeat (7-tuple)
+ * Trailing defaults are elided so a plain anyone/daily/no-note chore stays a
+ * 4-tuple exactly as before. When a later field is present but an earlier
+ * optional one isn't, the earlier one is written as "" (note) / "" (assignee)
+ * as a placeholder. `repeat` is encoded "w"|"o" (daily → absent).
  */
+type RepeatCode = "w" | "o";
 type ChoreTuple =
   | [string, string, string, number]
-  | [string, string, string, number, string];
+  | [string, string, string, number, string]
+  | [string, string, string, number, string, string]
+  | [string, string, string, number, string, string, RepeatCode];
 interface InviteWire {
   i: string; // familyId
   f: string; // familyName
@@ -251,12 +411,17 @@ export function encodeInvite(payload: InvitePayload): string {
     p: payload.parentAddress,
     k: payload.kidName,
     c: payload.chores.map((ch): ChoreTuple => {
-      const note = ch.note?.trim();
-      // Omit the trailing element entirely when there's no note (keeps links
-      // as compact as the old 4-tuple shape).
-      return note
-        ? [ch.id, ch.name, ch.emoji, ch.rewardXlm, note]
-        : [ch.id, ch.name, ch.emoji, ch.rewardXlm];
+      const note = ch.note?.trim() ?? "";
+      const assignee = ch.assignee?.trim() ?? "";
+      const rep: RepeatCode | "" =
+        ch.repeat === "weekly" ? "w" : ch.repeat === "once" ? "o" : "";
+      // Build the fullest tuple, then drop trailing defaults so a plain
+      // anyone/daily/no-note chore is still a 4-tuple (compact as before).
+      const full: [string, string, string, number, string, string, RepeatCode | ""] =
+        [ch.id, ch.name, ch.emoji, ch.rewardXlm, note, assignee, rep];
+      let end = 7;
+      while (end > 4 && !full[end - 1]) end--;
+      return full.slice(0, end) as ChoreTuple;
     }),
   };
   return encodeBlob(wire);
@@ -269,14 +434,20 @@ export function decodeInvite(blob: string): InvitePayload {
     familyName: w.f,
     parentAddress: w.p,
     kidName: w.k,
-    // Destructure the 5th element defensively — old links won't have it, so
-    // `note` is simply `undefined` there.
-    chores: (w.c ?? []).map(([id, name, emoji, rewardXlm, note]) => ({
+    // Destructure defensively — older links won't have the trailing elements,
+    // so note/assignee/rep are simply `undefined` there.
+    chores: (w.c ?? []).map(([id, name, emoji, rewardXlm, note, assignee, rep]) => ({
       id,
       name,
       emoji,
       rewardXlm,
       ...(note ? { note } : {}),
+      ...(assignee ? { assignee } : {}),
+      ...(rep === "w"
+        ? { repeat: "weekly" as const }
+        : rep === "o"
+          ? { repeat: "once" as const }
+          : {}),
     })),
   };
 }
