@@ -14,7 +14,7 @@ import {
   ConfettiIcon,
   WarningCircleIcon,
   SparkleIcon,
-  UsersIcon,
+  UsersThreeIcon,
   LockIcon,
 } from "@phosphor-icons/react";
 import { Button } from "@/components/atoms/button";
@@ -109,51 +109,57 @@ function JoinFamilyPage() {
             </Button>
           </div>
         ) : (
-          <div className="flex flex-col items-center gap-7">
-            <div className="mb-1">
-              <h1 className="font-display text-4xl font-extrabold tracking-tight">
+          <div className="flex w-full flex-col items-center gap-6 stagger-rise">
+            {/* Big team tile — the hero of the "Join the Team!" moment */}
+            <div className="animate-float-soft flex size-24 items-center justify-center rounded-[1.9rem] border-2 border-m-ink bg-m-mint shadow-[var(--m-pop-lg)]">
+              <UsersThreeIcon className="size-12 text-m-green-ink" weight="duotone" />
+            </div>
+
+            <div>
+              <p className="text-microlabel text-m-purple">You&apos;re invited</p>
+              <h1 className="mt-1.5 font-display text-4xl font-extrabold leading-none tracking-tight">
                 Join the Team! 🎈
               </h1>
-              <p className="mt-2 max-w-xs text-[15px] font-bold text-muted-foreground text-pretty">
-                <span className="text-foreground">{invite.familyName}</span>{" "}
-                invited{" "}
-                <span className="text-foreground">
-                  {invite.kidName || "you"}
-                </span>{" "}
-                to start earning.
+              <p className="mx-auto mt-3 max-w-[16rem] text-[15px] font-bold text-muted-foreground text-pretty">
+                {invite.kidName ? (
+                  <>
+                    Hey{" "}
+                    <span className="text-foreground">{invite.kidName}</span> — you
+                    made it!
+                  </>
+                ) : (
+                  "You made it!"
+                )}
               </p>
             </div>
 
-            {/* Family + chores preview */}
-            <div className="flex w-full max-w-xs flex-col gap-3 card-pop p-5">
-              <div className="flex items-center gap-3">
-                <span className="flex size-12 items-center justify-center rounded-[14px] border-2 border-m-ink bg-m-lilac shadow-[var(--m-pop-sm)]">
-                  <UsersIcon className="size-6 text-m-purple" weight="duotone" />
+            {/* Family name huge + the chore-count line ("Dad put 3 chores up") */}
+            <div className="w-full max-w-xs card-pop card-pop-butter p-5 text-center">
+              <p className="text-microlabel text-muted-foreground">Your family</p>
+              <p className="mt-1 truncate font-display text-2xl font-extrabold leading-tight">
+                {invite.familyName}
+              </p>
+              <div className="mt-3.5 inline-flex items-center gap-2 rounded-full border-2 border-m-ink bg-card px-4 py-1.5 shadow-[var(--m-pop-sm)]">
+                <SparkleIcon className="size-4 text-m-gold" weight="fill" />
+                <span className="font-display text-sm font-extrabold">
+                  {invite.chores.length}{" "}
+                  {invite.chores.length === 1 ? "chore" : "chores"} up for grabs
                 </span>
-                <div className="min-w-0 text-left">
-                  <p className="truncate font-display text-lg font-extrabold">
-                    {invite.familyName}
-                  </p>
-                  <p className="text-[13px] font-bold text-muted-foreground">
-                    {invite.chores.length}{" "}
-                    {invite.chores.length === 1 ? "chore" : "chores"} to earn
-                  </p>
-                </div>
               </div>
 
               {invite.chores.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
+                <div className="mt-4 flex flex-wrap justify-center gap-1.5">
                   {invite.chores.slice(0, 6).map((c) => (
                     <span
                       key={c.id}
-                      className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-[12px] font-extrabold text-foreground"
+                      className="inline-flex items-center gap-1 rounded-full border-2 border-m-ink bg-card px-2.5 py-1 text-[12px] font-extrabold text-foreground shadow-[var(--m-pop-sm)]"
                     >
                       <span aria-hidden>{c.emoji}</span>
                       {c.name}
                     </span>
                   ))}
                   {invite.chores.length > 6 && (
-                    <span className="inline-flex items-center rounded-full bg-muted px-2.5 py-1 text-[12px] font-extrabold text-muted-foreground">
+                    <span className="inline-flex items-center rounded-full border-2 border-m-ink bg-card px-2.5 py-1 text-[12px] font-extrabold text-muted-foreground shadow-[var(--m-pop-sm)]">
                       +{invite.chores.length - 6} more
                     </span>
                   )}
@@ -163,7 +169,7 @@ function JoinFamilyPage() {
 
             <Button size="lg" onClick={handleJoin} className="w-full max-w-xs">
               <SparkleIcon className="mr-2 size-5" weight="fill" />
-              Join {invite.familyName}
+              I&apos;m in!
             </Button>
             <button
               onClick={() => navigate({ to: "/dashboard" })}

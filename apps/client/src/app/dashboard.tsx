@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, redirect } from "@tanstack/react-router";
 import {
   BellIcon,
   SparkleIcon,
@@ -17,9 +17,17 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/atoms/avatar";
 import { useStellarWallet } from "@/providers/stellar-wallet-provider";
 import { useMyRewards } from "@/hooks/use-rewards";
 import { useFamily, useChoreStates } from "@/hooks/use-family";
+import { loadFamily } from "@/lib/family";
 import { zwerc20 } from "@/contracts/stellar";
 
 export const Route = createFileRoute("/dashboard")({
+  // A device with no family hasn't walked through the front door yet — send it to
+  // /welcome. (Families arrive here from /setup, /join, or a returning visit.)
+  beforeLoad: () => {
+    if (typeof window !== "undefined" && !loadFamily()) {
+      throw redirect({ to: "/welcome" });
+    }
+  },
   component: DashboardPage,
 });
 

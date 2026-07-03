@@ -7,7 +7,7 @@
   /* ---- Maestro palette (playful family-treasury, kid-friendly) ----
      Soft pale-lavender canvas, white floating cards, bright-green primary,
      with gold / blue / purple / pink accents for quests, coins & streaks. */
-  --background: oklch(0.965 0.012 300);        /* pale lavender off-white */
+  --background: oklch(0.975 0.014 92);         /* warm cream — matches .bg-maestro-canvas so overscroll/edges never flash a different color */
   --foreground: oklch(0.26 0.03 285);          /* deep friendly indigo-ink */
   --card: oklch(1 0 0);                          /* pure white cards */
   --card-foreground: oklch(0.26 0.03 285);

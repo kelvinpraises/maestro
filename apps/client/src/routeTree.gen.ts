@@ -9,6 +9,8 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './app/__root'
+import { Route as WelcomeRouteImport } from './app/welcome'
+import { Route as SetupRouteImport } from './app/setup'
 import { Route as SettingsRouteImport } from './app/settings'
 import { Route as JoinRouteImport } from './app/join'
 import { Route as HistoryRouteImport } from './app/history'
@@ -19,6 +21,16 @@ import { Route as StreamsIndexRouteImport } from './app/streams/index'
 import { Route as RewardsIndexRouteImport } from './app/rewards/index'
 import { Route as CirclesIndexRouteImport } from './app/circles/index'
 
+const WelcomeRoute = WelcomeRouteImport.update({
+  id: '/welcome',
+  path: '/welcome',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SetupRoute = SetupRouteImport.update({
+  id: '/setup',
+  path: '/setup',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -72,6 +84,8 @@ export interface FileRoutesByFullPath {
   '/history': typeof HistoryRoute
   '/join': typeof JoinRoute
   '/settings': typeof SettingsRoute
+  '/setup': typeof SetupRoute
+  '/welcome': typeof WelcomeRoute
   '/circles/': typeof CirclesIndexRoute
   '/rewards/': typeof RewardsIndexRoute
   '/streams/': typeof StreamsIndexRoute
@@ -83,6 +97,8 @@ export interface FileRoutesByTo {
   '/history': typeof HistoryRoute
   '/join': typeof JoinRoute
   '/settings': typeof SettingsRoute
+  '/setup': typeof SetupRoute
+  '/welcome': typeof WelcomeRoute
   '/circles': typeof CirclesIndexRoute
   '/rewards': typeof RewardsIndexRoute
   '/streams': typeof StreamsIndexRoute
@@ -95,6 +111,8 @@ export interface FileRoutesById {
   '/history': typeof HistoryRoute
   '/join': typeof JoinRoute
   '/settings': typeof SettingsRoute
+  '/setup': typeof SetupRoute
+  '/welcome': typeof WelcomeRoute
   '/circles/': typeof CirclesIndexRoute
   '/rewards/': typeof RewardsIndexRoute
   '/streams/': typeof StreamsIndexRoute
@@ -108,6 +126,8 @@ export interface FileRouteTypes {
     | '/history'
     | '/join'
     | '/settings'
+    | '/setup'
+    | '/welcome'
     | '/circles/'
     | '/rewards/'
     | '/streams/'
@@ -119,6 +139,8 @@ export interface FileRouteTypes {
     | '/history'
     | '/join'
     | '/settings'
+    | '/setup'
+    | '/welcome'
     | '/circles'
     | '/rewards'
     | '/streams'
@@ -130,6 +152,8 @@ export interface FileRouteTypes {
     | '/history'
     | '/join'
     | '/settings'
+    | '/setup'
+    | '/welcome'
     | '/circles/'
     | '/rewards/'
     | '/streams/'
@@ -142,6 +166,8 @@ export interface RootRouteChildren {
   HistoryRoute: typeof HistoryRoute
   JoinRoute: typeof JoinRoute
   SettingsRoute: typeof SettingsRoute
+  SetupRoute: typeof SetupRoute
+  WelcomeRoute: typeof WelcomeRoute
   CirclesIndexRoute: typeof CirclesIndexRoute
   RewardsIndexRoute: typeof RewardsIndexRoute
   StreamsIndexRoute: typeof StreamsIndexRoute
@@ -149,6 +175,20 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/welcome': {
+      id: '/welcome'
+      path: '/welcome'
+      fullPath: '/welcome'
+      preLoaderRoute: typeof WelcomeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/setup': {
+      id: '/setup'
+      path: '/setup'
+      fullPath: '/setup'
+      preLoaderRoute: typeof SetupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings': {
       id: '/settings'
       path: '/settings'
@@ -222,6 +262,8 @@ const rootRouteChildren: RootRouteChildren = {
   HistoryRoute: HistoryRoute,
   JoinRoute: JoinRoute,
   SettingsRoute: SettingsRoute,
+  SetupRoute: SetupRoute,
+  WelcomeRoute: WelcomeRoute,
   CirclesIndexRoute: CirclesIndexRoute,
   RewardsIndexRoute: RewardsIndexRoute,
   StreamsIndexRoute: StreamsIndexRoute,

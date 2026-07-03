@@ -10,7 +10,7 @@
 //     link that lets the kid device import + privately claim it.
 //   • A kid sees a read-only view of their family + chores.
 
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useCallback, useMemo } from "react";
 import {
   PlusIcon,
@@ -54,16 +54,9 @@ export const Route = createFileRoute("/circles/")({
 const EMOJI_CHOICES = ["🛏️", "🗑️", "🍽️", "🐕", "🧹", "📚", "🌱", "🧺", "🧼", "🚿"];
 
 function FamilyPage() {
-  const {
-    family,
-    role,
-    createFamily,
-    addChore,
-    removeChore,
-    addKidName,
-  } = useFamily();
+  const { family, role, addChore, removeChore, addKidName } = useFamily();
 
-  if (!family) return <SetupCard onCreate={createFamily} />;
+  if (!family) return <NoFamilyCard />;
 
   return (
     <div className="stagger-rise space-y-5">
@@ -92,34 +85,12 @@ function FamilyPage() {
   );
 }
 
-// ── setup card: a device with no family ──────────────────────────────────────
+// ── no-family card: a device with no family → send to the /setup flow ────────
+// Family creation now lives in the warm, single-screen-at-a-time /setup flow
+// (name → kids → starter chores). This card is just the doorway to it.
 
-function SetupCard({
-  onCreate,
-}: {
-  onCreate: (input: {
-    name: string;
-    parentAddress: string;
-    kidNames?: string[];
-  }) => void;
-}) {
-  const { publicKey } = useStellarWallet();
-  const [name, setName] = useState("");
-  const [kids, setKids] = useState("");
-
-  const handleCreate = () => {
-    if (!name.trim()) {
-      toast.error("Give your family a name first");
-      return;
-    }
-    const kidNames = kids
-      .split(",")
-      .map((k) => k.trim())
-      .filter(Boolean);
-    onCreate({ name: name.trim(), parentAddress: publicKey, kidNames });
-    toast.success("Family created! 🎉");
-  };
-
+function NoFamilyCard() {
+  const navigate = useNavigate();
   return (
     <div className="stagger-rise flex flex-col items-center gap-6 pt-6 text-center">
       <div className="flex size-24 items-center justify-center rounded-[1.9rem] border-2 border-m-ink bg-m-lilac shadow-[var(--m-pop)]">
@@ -130,35 +101,19 @@ function SetupCard({
           Start your family
         </h1>
         <p className="mt-2 max-w-xs text-[15px] font-bold text-muted-foreground text-pretty">
-          Name your family and add your kids. No accounts — everything lives on
-          this device.
+          Name your family, add your kids, and pick a few starter chores — it
+          takes about two minutes.
         </p>
       </div>
 
-      <div className="w-full space-y-3.5 card-pop p-5 text-left">
-        <div>
-          <Label className="mb-2">Family name</Label>
-          <Input
-            placeholder="e.g. The Smiths"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleCreate()}
-          />
-        </div>
-        <div>
-          <Label className="mb-2">Kids (comma separated)</Label>
-          <Input
-            placeholder="e.g. Alex, Sam"
-            value={kids}
-            onChange={(e) => setKids(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleCreate()}
-          />
-        </div>
-        <Button onClick={handleCreate} size="lg" className="w-full">
-          <SparkleIcon className="mr-2 size-5" weight="fill" />
-          Create family
-        </Button>
-      </div>
+      <Button
+        onClick={() => navigate({ to: "/setup" })}
+        size="lg"
+        className="w-full max-w-xs"
+      >
+        <SparkleIcon className="mr-2 size-5" weight="fill" />
+        Set up my family
+      </Button>
     </div>
   );
 }

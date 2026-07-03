@@ -13,6 +13,8 @@ function RootLayout() {
   const location = useLocation();
   const isHomePage = location.pathname === "/";
   const isFullscreenRoute =
+    location.pathname.startsWith("/welcome") ||
+    location.pathname.startsWith("/setup") ||
     location.pathname.startsWith("/join") ||
     location.pathname.startsWith("/claim-link");
 
