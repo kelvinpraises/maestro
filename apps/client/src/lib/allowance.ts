@@ -14,6 +14,7 @@
 // never the open-ended 0 / "all" defaults.
 
 import type { StreamReceiver } from "drips";
+import { StrKey } from "@stellar/stellar-sdk";
 
 /** 1 XLM = 10^7 stroops (the i128 base unit the contract moves). */
 export const XLM_STROOPS = 10_000_000n;
@@ -137,4 +138,65 @@ export function buildAllowanceReceiver(params: {
 /** Total stroops a stream will move over its whole `duration`. */
 export function totalOverDuration(amtPerSec: bigint, durationSecs: bigint): bigint {
   return (amtPerSec * durationSecs) / AMT_PER_SEC_MULTIPLIER;
+}
+
+// ── multi-receiver ordering (must match the contract or set_streams panics) ──
+//
+// `streams.rs::build_configs` REQUIRES `new_receivers` to be strictly sorted and
+// deduped by `receiver_lt`: account ascending, then config (stream_id,
+// amt_per_sec, start, duration). Two facts make a naive JS sort wrong:
+//
+//   1. The account key is a Soroban `Address`, ordered by its RAW 32-byte
+//      ed25519 public key — NOT the base32 "G…" string. A lexicographic sort of
+//      the G-strings disagrees with the byte order ~8% of the time, which would
+//      trip "streams receivers not sorted/deduped" on-chain. So we compare the
+//      decoded ed25519 bytes. (For account addresses the ScAddress XDR
+//      discriminant is identical across all of them, so byte order == Address
+//      order — verified against the SDK's own XDR encoder.)
+//   2. The sort must be STRICT (no equal-adjacent receivers), because the
+//      contract rejects a non-strict list. We drop exact duplicates.
+
+/** Lexicographic comparison of two accounts' raw ed25519 key bytes (Address order). */
+function accountBytesCmp(a: string, b: string): number {
+  const A = StrKey.decodeEd25519PublicKey(a);
+  const B = StrKey.decodeEd25519PublicKey(b);
+  for (let i = 0; i < A.length; i++) {
+    if (A[i] !== B[i]) return A[i] - B[i];
+  }
+  return 0;
+}
+
+/** `config_lt` mirror: stream_id, then amt_per_sec, then start, then duration. */
+function configCmp(a: StreamReceiver["config"], b: StreamReceiver["config"]): number {
+  if (a.stream_id !== b.stream_id) return a.stream_id < b.stream_id ? -1 : 1;
+  if (a.amt_per_sec !== b.amt_per_sec) return a.amt_per_sec < b.amt_per_sec ? -1 : 1;
+  if (a.start !== b.start) return a.start < b.start ? -1 : 1;
+  if (a.duration !== b.duration) return a.duration < b.duration ? -1 : 1;
+  return 0;
+}
+
+/** Full `receiver_lt` mirror: by account (raw key bytes), then by config. */
+export function receiverCmp(a: StreamReceiver, b: StreamReceiver): number {
+  const byAccount = accountBytesCmp(a.account, b.account);
+  if (byAccount !== 0) return byAccount;
+  return configCmp(a.config, b.config);
+}
+
+/**
+ * Sort receivers into the strict order `set_streams` requires (account bytes,
+ * then config) and drop exact duplicates. Passing the result as `new_receivers`
+ * keeps the contract's `build_configs` sort/dedup check happy. Returns a fresh
+ * array; the input is not mutated.
+ */
+export function sortReceivers(receivers: StreamReceiver[]): StreamReceiver[] {
+  const sorted = [...receivers].sort(receiverCmp);
+  const out: StreamReceiver[] = [];
+  for (const r of sorted) {
+    const prev = out[out.length - 1];
+    // Skip an exact duplicate (same account + identical config) — a non-strict
+    // pair would make the contract reject the whole list.
+    if (prev && receiverCmp(prev, r) === 0) continue;
+    out.push(r);
+  }
+  return out;
 }

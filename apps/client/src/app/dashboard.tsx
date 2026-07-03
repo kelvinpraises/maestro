@@ -263,12 +263,14 @@ function KidHome({ chores }: { chores: ChoreRow[] }) {
 
       {/* My Stash — balance + the live allowance drip that pours into it. The
           faucet drips into the piggy bank you're looking at (DESIGN-STORY §4).
-          Tapping it opens /me, where the stash's detail + goal live. */}
+          Tapping the card opens /me (stash detail + goal); tapping the drip line
+          opens the kid's own /allowance view (who's sending it, rate, scoop). */}
       <KidStashCard
         stashBalance={stashBalance}
         goalName={goal?.name}
         goalTarget={goal?.targetXlm}
         onOpen={() => navigate({ to: "/me" })}
+        onOpenAllowance={() => navigate({ to: "/allowance" })}
       />
 
       {/* Rewards mini-card → private-claim flow. */}
@@ -515,12 +517,15 @@ function KidStashCard({
   goalName,
   goalTarget,
   onOpen,
+  onOpenAllowance,
 }: {
   stashBalance: number | null;
   /** The kid's goal (from the shared store), or undefined when none is set. */
   goalName?: string;
   goalTarget?: number;
   onOpen: () => void;
+  /** Open the kid's own /allowance view (tapped from the drip line). */
+  onOpenAllowance: () => void;
 }) {
   const { publicKey } = useStellarWallet();
   const drip = useAllowanceDrip(publicKey);
@@ -617,10 +622,20 @@ function KidStashCard({
         />
       </button>
 
-      {/* Drip line + Scoop — only when money is actually dripping in. */}
+      {/* Drip line + Scoop — only when money is actually dripping in. The drip
+          line itself is a button into the kid's own /allowance view (who's
+          sending it, the rate, and a roomier scoop); the Scoop button below stays
+          independent so a tap to collect never navigates away. */}
       {drip.hasIncoming && (
         <div className="border-t-2 border-m-ink/15 px-4 py-3">
-          <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenAllowance();
+            }}
+            className="press-pop flex w-full items-center gap-2 text-left"
+          >
             <span
               aria-hidden
               className="drip-dot flex size-5 shrink-0 items-center justify-center rounded-full bg-m-mint text-m-green-ink"
@@ -635,7 +650,11 @@ function KidStashCard({
                 XLM waiting
               </span>
             </p>
-          </div>
+            <CaretRightIcon
+              className="size-4 shrink-0 text-m-green-ink/60"
+              weight="bold"
+            />
+          </button>
 
           {waitingXlm > 0 && (
             <button
