@@ -19,6 +19,7 @@ import {
   ListChecksIcon,
   PiggyBankIcon,
   CaretRightIcon,
+  CheckCircleIcon,
   GiftIcon,
   UsersIcon,
   BroomIcon,
@@ -41,6 +42,7 @@ import { IconTile, EmojiTile } from "@/components/atoms/icon-tile";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/atoms/avatar";
 import { Button } from "@/components/atoms/button";
 import { useStellarWallet } from "@/providers/stellar-wallet-provider";
+import { cn } from "@/utils";
 import { useMyRewards, useFundReward } from "@/hooks/use-rewards";
 import {
   useFamily,
@@ -1025,21 +1027,40 @@ function ParentHome({ chores }: { chores: ChoreRow[] }) {
           </button>
         ) : (
           <div className="space-y-2.5">
-            {chores.map((c) => (
-              <div key={c.id} className="card-pop flex items-center gap-3 p-3">
-                {c.emoji ? (
-                  <EmojiTile emoji={c.emoji} tint="neutral" bordered />
-                ) : (
-                  <IconTile icon={ListChecksIcon} tint="neutral" bordered />
-                )}
-                <p className="min-w-0 flex-1 truncate font-display text-[15px] font-extrabold">
-                  {c.name}
-                </p>
-                <span className="inline-flex items-center gap-1 rounded-full border border-m-ink/25 bg-white/70 px-2.5 py-0.5 text-[13px] font-extrabold tabular-nums text-m-green-ink">
-                  +{c.rewardXlm.toFixed(2)} XLM
-                </span>
-              </div>
-            ))}
+            {chores.map((c) => {
+              // Reflect what the kids have done, so approving a nod visibly
+              // resolves the chore here too (owner ask: it should "move to done").
+              const st = statesFor(c);
+              const doneKids = Object.entries(st).filter(([, s]) => s === "done").map(([k]) => k);
+              const waiting = Object.values(st).some((s) => s === "pending");
+              const isDone = doneKids.length > 0;
+              return (
+                <div key={c.id} className={cn("card-pop flex items-center gap-3 p-3", isDone && "bg-m-mint/40")}>
+                  {c.emoji ? (
+                    <EmojiTile emoji={c.emoji} tint="neutral" bordered />
+                  ) : (
+                    <IconTile icon={ListChecksIcon} tint="neutral" bordered />
+                  )}
+                  <p className={cn("min-w-0 flex-1 truncate font-display text-[15px] font-extrabold", isDone && "text-foreground/55 line-through decoration-2")}>
+                    {c.name}
+                  </p>
+                  {isDone ? (
+                    <span className="inline-flex items-center gap-1 rounded-full border-2 border-m-ink bg-primary/20 px-2.5 py-0.5 text-[13px] font-extrabold text-m-green-ink">
+                      <CheckCircleIcon className="size-3.5" weight="fill" />
+                      {doneKids.length === 1 ? doneKids[0] : `${doneKids.length} done`}
+                    </span>
+                  ) : waiting ? (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-m-ink/25 bg-m-sky/60 px-2.5 py-0.5 text-[13px] font-extrabold text-m-blue">
+                      Waiting
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-m-ink/25 bg-white/70 px-2.5 py-0.5 text-[13px] font-extrabold tabular-nums text-m-green-ink">
+                      +{c.rewardXlm.toFixed(2)} XLM
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </section>
