@@ -1,6 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { Sparkles, Plus, Minus, Coins, PiggyBank, Loader2, ArrowDownToLine } from "lucide-react";
+import {
+  SparkleIcon,
+  PlusIcon,
+  MinusIcon,
+  CoinsIcon,
+  PiggyBankIcon,
+  SpinnerGapIcon,
+  DownloadSimpleIcon,
+} from "@phosphor-icons/react";
 import { cn } from "@/utils";
 import { useStellarWallet } from "@/providers/stellar-wallet-provider";
 import {
@@ -61,22 +69,22 @@ function AllowancePage() {
 
       {/* ── Live allowance state ──────────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-2.5">
-        <div className="rounded-3xl border border-border/60 bg-card p-4 shadow-sm">
-          <span className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-[0.1em] text-muted-foreground">
-            <PiggyBank className="size-3.5" strokeWidth={2.6} />
+        <div className="card-pop card-pop-butter p-4">
+          <span className="flex items-center gap-1.5 text-microlabel text-muted-foreground">
+            <PiggyBankIcon className="size-3.5" weight="duotone" />
             Still funded
           </span>
-          <p className="mt-1 font-display text-2xl font-extrabold tabular-nums">
+          <p className="mt-1 text-money text-2xl">
             {state.isLoading ? "…" : `${stroopsToXlm(fundedRemaining).toFixed(4)}`}
           </p>
           <span className="text-[11px] font-bold text-muted-foreground">XLM</span>
         </div>
-        <div className="rounded-3xl border border-border/60 bg-primary/10 p-4 shadow-sm">
-          <span className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-[0.1em] text-m-green-ink">
-            <Coins className="size-3.5" strokeWidth={2.6} />
+        <div className="card-pop card-pop-mint p-4">
+          <span className="flex items-center gap-1.5 text-microlabel text-m-green-ink">
+            <CoinsIcon className="size-3.5" weight="duotone" />
             Waiting to collect
           </span>
-          <p className="mt-1 font-display text-2xl font-extrabold tabular-nums text-m-green-ink">
+          <p className="mt-1 text-money text-2xl text-m-green-ink">
             {state.isLoading || waiting === null ? "…" : `${stroopsToXlm(waiting).toFixed(4)}`}
           </p>
           <span className="text-[11px] font-bold text-m-green-ink/70">XLM</span>
@@ -88,16 +96,16 @@ function AllowancePage() {
         type="button"
         disabled={collect.isPending || !hasReceivable}
         onClick={() => collect.mutate({ to: publicKey })}
-        className="flex h-14 w-full items-center justify-center gap-2 rounded-full bg-primary font-display text-lg font-extrabold text-primary-foreground shadow-lg transition-[transform,filter] hover:brightness-[1.04] active:scale-[0.97] disabled:opacity-50"
+        className="press-pop flex h-14 w-full items-center justify-center gap-2 rounded-full border-2 border-m-ink bg-primary font-display text-lg font-extrabold text-primary-foreground shadow-[var(--m-pop)] hover:brightness-[1.03] disabled:opacity-50"
       >
         {collect.isPending ? (
           <>
-            <Loader2 className="size-5 animate-spin" strokeWidth={2.6} />
+            <SpinnerGapIcon className="size-5 animate-spin" weight="bold" />
             Collecting…
           </>
         ) : (
           <>
-            <ArrowDownToLine className="size-5" strokeWidth={2.6} />
+            <DownloadSimpleIcon className="size-5" weight="bold" />
             Collect my allowance
           </>
         )}
@@ -114,19 +122,19 @@ function AllowancePage() {
       )}
 
       {/* ── Set up a new allowance ────────────────────────────────────────── */}
-      <section className="space-y-3 rounded-[1.6rem] border border-border/60 bg-card p-4 shadow-sm">
+      <section className="space-y-3 card-pop p-4">
         <h2 className="flex items-center gap-1.5 font-display text-lg font-extrabold">
-          <Sparkles className="size-4 text-m-gold" strokeWidth={2.6} />
+          <SparkleIcon className="size-4 text-m-gold" weight="fill" />
           Start an allowance
         </h2>
 
         {/* Rate stepper */}
-        <div className="flex items-center justify-between rounded-2xl bg-muted/60 px-3.5 py-3">
+        <div className="field-pop flex items-center justify-between px-3.5 py-3">
           <div>
-            <p className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-muted-foreground">
+            <p className="text-microlabel text-muted-foreground">
               Rate
             </p>
-            <p className="font-display text-lg font-extrabold tabular-nums text-m-green-ink">
+            <p className="text-money text-lg text-m-green-ink">
               {rate.toFixed(2)} XLM
             </p>
           </div>
@@ -144,10 +152,10 @@ function AllowancePage() {
               type="button"
               onClick={() => setPeriod(p.id)}
               className={cn(
-                "flex-1 rounded-2xl px-3 py-2.5 font-display text-sm font-extrabold transition-colors",
+                "press-pop flex-1 rounded-2xl border-2 border-m-ink px-3 py-2.5 font-display text-sm font-extrabold",
                 period === p.id
-                  ? "bg-m-purple text-white shadow-sm"
-                  : "border-2 border-border bg-card text-muted-foreground",
+                  ? "bg-m-purple text-white shadow-[var(--m-pop-sm)]"
+                  : "bg-card text-muted-foreground",
               )}
             >
               {p.label}
@@ -156,12 +164,12 @@ function AllowancePage() {
         </div>
 
         {/* Fund stepper */}
-        <div className="flex items-center justify-between rounded-2xl bg-muted/60 px-3.5 py-3">
+        <div className="field-pop flex items-center justify-between px-3.5 py-3">
           <div>
-            <p className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-muted-foreground">
+            <p className="text-microlabel text-muted-foreground">
               Fund with
             </p>
-            <p className="font-display text-lg font-extrabold tabular-nums">
+            <p className="text-money text-lg">
               {fundXlm.toFixed(2)} XLM
             </p>
           </div>
@@ -177,16 +185,16 @@ function AllowancePage() {
           onClick={() =>
             create.mutate({ rate, period, fundXlm, recipient: publicKey })
           }
-          className="flex h-13 w-full items-center justify-center gap-2 rounded-full bg-m-blue py-3.5 font-display text-base font-extrabold text-white shadow-lg transition-[transform,filter] hover:brightness-105 active:scale-[0.97] disabled:opacity-50"
+          className="press-pop flex h-13 w-full items-center justify-center gap-2 rounded-full border-2 border-m-ink bg-m-blue py-3.5 font-display text-base font-extrabold text-white shadow-[var(--m-pop)] hover:brightness-105 disabled:opacity-50"
         >
           {create.isPending ? (
             <>
-              <Loader2 className="size-5 animate-spin" strokeWidth={2.6} />
+              <SpinnerGapIcon className="size-5 animate-spin" weight="bold" />
               Setting up…
             </>
           ) : (
             <>
-              <Plus className="size-5" strokeWidth={2.8} />
+              <PlusIcon className="size-5" weight="bold" />
               Start allowance
             </>
           )}
@@ -221,16 +229,16 @@ function Stepper({
       aria-label={label}
       onClick={onClick}
       className={cn(
-        "flex size-9 items-center justify-center rounded-full shadow-sm transition-transform active:scale-90",
+        "press-pop flex size-9 items-center justify-center rounded-full border-2 border-m-ink shadow-[var(--m-pop-sm)]",
         variant === "primary"
           ? "bg-primary text-primary-foreground"
           : "bg-muted text-foreground",
       )}
     >
       {variant === "primary" ? (
-        <Plus className="size-4" strokeWidth={3} />
+        <PlusIcon className="size-4" weight="bold" />
       ) : (
-        <Minus className="size-4" strokeWidth={3} />
+        <MinusIcon className="size-4" weight="bold" />
       )}
     </button>
   );

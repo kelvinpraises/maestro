@@ -10,7 +10,13 @@
 
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { PartyPopper, AlertCircle, Sparkles } from "lucide-react";
+import {
+  ConfettiIcon,
+  WarningCircleIcon,
+  SparkleIcon,
+  UsersIcon,
+  LockIcon,
+} from "@phosphor-icons/react";
 import { Button } from "@/components/atoms/button";
 import { useFamily } from "@/hooks/use-family";
 import {
@@ -61,8 +67,8 @@ function JoinFamilyPage() {
       <div className="relative mx-auto flex min-h-dvh w-full max-w-md flex-col items-center justify-center px-6 py-10 text-center">
         {invalid ? (
           <div className="flex flex-col items-center text-center">
-            <div className="mb-4 flex size-20 items-center justify-center rounded-[1.75rem] bg-destructive/10 shadow-inner">
-              <AlertCircle className="size-9 text-destructive" />
+            <div className="mb-4 flex size-20 items-center justify-center rounded-[1.75rem] border-2 border-m-ink bg-destructive/10 shadow-[var(--m-pop-sm)]">
+              <WarningCircleIcon className="size-9 text-destructive" weight="duotone" />
             </div>
             <h1 className="mb-2 font-display text-2xl font-extrabold">
               Invite not valid
@@ -83,8 +89,8 @@ function JoinFamilyPage() {
           <p className="text-sm font-bold text-muted-foreground">Opening…</p>
         ) : joined ? (
           <div className="flex flex-col items-center gap-6">
-            <div className="flex size-24 items-center justify-center rounded-full bg-m-mint text-5xl shadow-inner">
-              <PartyPopper className="size-10 text-m-green-ink" />
+            <div className="flex size-24 items-center justify-center rounded-full border-2 border-m-ink bg-m-mint shadow-[var(--m-pop)]">
+              <ConfettiIcon className="size-10 text-m-green-ink" weight="duotone" />
             </div>
             <div>
               <h1 className="font-display text-3xl font-extrabold tracking-tight">
@@ -119,10 +125,10 @@ function JoinFamilyPage() {
             </div>
 
             {/* Family + chores preview */}
-            <div className="flex w-full max-w-xs flex-col gap-3 rounded-[1.75rem] border border-border/60 bg-card p-5 shadow-sm">
+            <div className="flex w-full max-w-xs flex-col gap-3 card-pop p-5">
               <div className="flex items-center gap-3">
-                <span className="flex size-12 items-center justify-center rounded-2xl bg-m-lilac text-2xl shadow-sm">
-                  👨‍👩‍👧‍👦
+                <span className="flex size-12 items-center justify-center rounded-[14px] border-2 border-m-ink bg-m-lilac shadow-[var(--m-pop-sm)]">
+                  <UsersIcon className="size-6 text-m-purple" weight="duotone" />
                 </span>
                 <div className="min-w-0 text-left">
                   <p className="truncate font-display text-lg font-extrabold">
@@ -156,20 +162,20 @@ function JoinFamilyPage() {
             </div>
 
             <Button size="lg" onClick={handleJoin} className="w-full max-w-xs">
-              <Sparkles className="mr-2 size-5" strokeWidth={2.6} />
+              <SparkleIcon className="mr-2 size-5" weight="fill" />
               Join {invite.familyName}
             </Button>
             <button
               onClick={() => navigate({ to: "/dashboard" })}
-              className="rounded-full border-2 border-border bg-card px-6 py-2.5 text-sm font-extrabold text-muted-foreground shadow-sm transition-transform hover:text-foreground active:scale-95"
+              className="press-pop rounded-full border-2 border-m-ink bg-card px-6 py-2.5 text-sm font-extrabold text-muted-foreground shadow-[var(--m-pop-sm)] hover:text-foreground"
             >
               I'll do it later
             </button>
           </div>
         )}
 
-        <p className="absolute bottom-6 flex items-center gap-1 text-xs font-bold text-muted-foreground/60">
-          🔒 Private &amp; safe
+        <p className="absolute bottom-6 flex items-center gap-1.5 text-xs font-bold text-muted-foreground/60">
+          <LockIcon className="size-3.5" weight="fill" /> Private &amp; safe
         </p>
       </div>
     </div>

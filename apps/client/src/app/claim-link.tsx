@@ -11,7 +11,13 @@
 
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useMemo } from "react";
-import { PartyPopper, Gift, Loader2, AlertCircle } from "lucide-react";
+import {
+  ConfettiIcon,
+  GiftIcon,
+  SpinnerGapIcon,
+  WarningCircleIcon,
+  LockIcon,
+} from "@phosphor-icons/react";
 import { Button } from "@/components/atoms/button";
 import { deriveNote } from "@/lib/claims";
 import { stroopsToXlm } from "@/lib/allowance";
@@ -81,8 +87,8 @@ function ClaimLinkPage() {
       <div className="relative mx-auto flex min-h-dvh w-full max-w-md flex-col items-center justify-center px-6 py-10 text-center">
         {invalid ? (
           <div className="flex flex-col items-center text-center">
-            <div className="mb-4 flex size-20 items-center justify-center rounded-[1.75rem] bg-destructive/10 shadow-inner">
-              <AlertCircle className="size-9 text-destructive" />
+            <div className="mb-4 flex size-20 items-center justify-center rounded-[1.75rem] border-2 border-m-ink bg-destructive/10 shadow-[var(--m-pop-sm)]">
+              <WarningCircleIcon className="size-9 text-destructive" weight="duotone" />
             </div>
             <h1 className="mb-2 font-display text-2xl font-extrabold">
               Hmm, that link's not right
@@ -101,15 +107,15 @@ function ClaimLinkPage() {
           </div>
         ) : !payload ? (
           <div className="flex flex-col items-center gap-3">
-            <Loader2 className="size-8 animate-spin text-primary" />
+            <SpinnerGapIcon className="size-8 animate-spin text-primary" weight="bold" />
             <p className="text-sm font-bold text-muted-foreground">
               Opening your reward…
             </p>
           </div>
         ) : imported ? (
           <div className="flex flex-col items-center gap-6">
-            <div className="flex size-24 items-center justify-center rounded-full bg-m-mint text-5xl shadow-inner">
-              <PartyPopper className="size-10 text-m-green-ink" />
+            <div className="flex size-24 items-center justify-center rounded-full border-2 border-m-ink bg-m-mint shadow-[var(--m-pop)]">
+              <ConfettiIcon className="size-10 text-m-green-ink" weight="duotone" />
             </div>
             <div>
               <h1 className="font-display text-3xl font-extrabold tracking-tight">
@@ -142,11 +148,11 @@ function ClaimLinkPage() {
             </div>
 
             {/* The reward, front and center */}
-            <div className="flex w-full max-w-xs flex-col items-center gap-2 rounded-[1.75rem] border border-border/60 bg-card p-7 shadow-sm">
-              <span className="flex size-16 items-center justify-center rounded-[1.4rem] bg-m-purple/12 text-3xl shadow-sm">
-                🎁
+            <div className="flex w-full max-w-xs flex-col items-center gap-2 card-pop p-7">
+              <span className="flex size-16 items-center justify-center rounded-[1.4rem] border-2 border-m-ink bg-m-purple/15 shadow-[var(--m-pop-sm)]">
+                <GiftIcon className="size-8 text-m-purple" weight="duotone" />
               </span>
-              <p className="font-display text-4xl font-extrabold tabular-nums text-m-green-ink">
+              <p className="text-money text-4xl text-m-green-ink">
                 {amountXlm.toFixed(2)}
                 <span className="ml-1 text-base font-bold text-muted-foreground">
                   XLM
@@ -160,20 +166,20 @@ function ClaimLinkPage() {
             </div>
 
             <Button size="lg" onClick={handleAdd} className="w-full max-w-xs">
-              <Gift className="mr-2 size-5" strokeWidth={2.6} />
+              <GiftIcon className="mr-2 size-5" weight="duotone" />
               Add to my stash
             </Button>
             <button
               onClick={() => navigate({ to: "/dashboard" })}
-              className="rounded-full border-2 border-border bg-card px-6 py-2.5 text-sm font-extrabold text-muted-foreground shadow-sm transition-transform hover:text-foreground active:scale-95"
+              className="press-pop rounded-full border-2 border-m-ink bg-card px-6 py-2.5 text-sm font-extrabold text-muted-foreground shadow-[var(--m-pop-sm)] hover:text-foreground"
             >
               Maybe later
             </button>
           </div>
         )}
 
-        <p className="absolute bottom-6 flex items-center gap-1 text-xs font-bold text-muted-foreground/60">
-          🔒 Private &amp; safe
+        <p className="absolute bottom-6 flex items-center gap-1.5 text-xs font-bold text-muted-foreground/60">
+          <LockIcon className="size-3.5" weight="fill" /> Private &amp; safe
         </p>
       </div>
     </div>

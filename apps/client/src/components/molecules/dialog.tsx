@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { XIcon } from "lucide-react";
+import { XIcon } from "@phosphor-icons/react";
 
 import { cn } from "@/utils";
 
@@ -63,7 +63,7 @@ function DialogContent({
             data-slot="dialog-close"
             className="absolute top-4 right-4 rounded-full p-1 opacity-70 transition-opacity hover:opacity-100 hover:bg-muted focus:outline-none disabled:pointer-events-none text-muted-foreground hover:text-foreground"
           >
-            <XIcon className="w-4 h-4" />
+            <XIcon weight="bold" className="w-4 h-4" />
             <span className="sr-only">Close</span>
           </DialogPrimitive.Close>
         )}

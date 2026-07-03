@@ -1,4 +1,4 @@
-import { Moon, Sun, Sparkles } from "lucide-react";
+import { MoonIcon, SunIcon, SparkleIcon } from "@phosphor-icons/react";
 import { useTheme } from "@/providers/theme-provider";
 
 import { Button } from "@/components/atoms/button";
@@ -16,18 +16,18 @@ export function ThemeSwitcher() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="outline" size="icon">
-          <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-          <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+          <SunIcon weight="bold" className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+          <MoonIcon weight="bold" className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
           <span className="sr-only">Toggle theme</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem onClick={() => setTheme("lavender")}>
-          <Sparkles className="mr-2 h-4 w-4 text-purple-400" />
+          <SparkleIcon weight="fill" className="mr-2 h-4 w-4 text-purple-400" />
           <span>Light</span>
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => setTheme("aurora")}>
-          <Moon className="mr-2 h-4 w-4 text-indigo-400" />
+          <MoonIcon weight="bold" className="mr-2 h-4 w-4 text-indigo-400" />
           <span>Dark</span>
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => setTheme("system")}>

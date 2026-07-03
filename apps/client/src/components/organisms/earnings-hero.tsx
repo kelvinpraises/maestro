@@ -1,4 +1,4 @@
-import { Flame } from "lucide-react";
+import { FlameIcon } from "@phosphor-icons/react";
 import { cn } from "@/utils";
 
 interface EarningsHeroProps {
@@ -25,20 +25,18 @@ export function EarningsHero({
   return (
     <div
       className={cn(
-        "animate-pop-in relative overflow-hidden rounded-3xl bg-primary p-5 text-primary-foreground shadow-lg",
+        // card-pop-green: saturated green fill wins over card-pop's cream base
+        // (plain bg-primary is overridden by the recipe's background).
+        "animate-pop-in card-pop card-pop-green card-pop-lg relative overflow-hidden p-5 text-primary-foreground",
         className,
       )}
     >
-      {/* playful soft light blobs */}
-      <div className="pointer-events-none absolute -right-8 -top-10 size-36 rounded-full bg-white/20 blur-2xl" />
-      <div className="pointer-events-none absolute -bottom-12 -left-6 size-32 rounded-full bg-white/10 blur-2xl" />
-
       <div className="relative">
-        <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-primary-foreground/70">
+        <p className="text-microlabel text-primary-foreground/70">
           {label}
         </p>
         <div className="mt-1 flex items-end gap-1.5">
-          <span className="font-display text-5xl font-extrabold leading-none tabular-nums">
+          <span className="text-money text-5xl leading-none">
             {amount.toFixed(2)}
           </span>
           <span className="pb-1 font-display text-xl font-extrabold leading-none text-primary-foreground/80">
@@ -46,8 +44,8 @@ export function EarningsHero({
           </span>
         </div>
 
-        <div className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-black/15 px-3 py-1.5">
-          <Flame className="size-4 text-m-gold" strokeWidth={2.6} />
+        <div className="mt-4 inline-flex items-center gap-1.5 rounded-full border-2 border-m-ink bg-m-butter px-3 py-1.5 text-foreground">
+          <FlameIcon className="size-4 text-[oklch(0.62_0.19_45)]" weight="fill" />
           <span className="text-sm font-extrabold">
             {streakDays}-day streak
           </span>

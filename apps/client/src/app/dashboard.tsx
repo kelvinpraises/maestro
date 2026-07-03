@@ -1,8 +1,18 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Bell, Sparkles, ListChecks, PiggyBank, ChevronRight, Gift } from "lucide-react";
+import {
+  BellIcon,
+  SparkleIcon,
+  ListChecksIcon,
+  PiggyBankIcon,
+  CaretRightIcon,
+  GiftIcon,
+  UsersIcon,
+  BroomIcon,
+} from "@phosphor-icons/react";
 import { useEffect, useMemo, useState } from "react";
 import { EarningsHero } from "@/components/organisms/earnings-hero";
 import { QuestCard, type QuestTint } from "@/components/molecules/quest-card";
+import { IconTile } from "@/components/atoms/icon-tile";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/atoms/avatar";
 import { useStellarWallet } from "@/providers/stellar-wallet-provider";
 import { useMyRewards } from "@/hooks/use-rewards";
@@ -95,7 +105,7 @@ function DashboardPage() {
       {/* Greeting header */}
       <header className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Avatar className="size-12 rounded-2xl border-2 border-card shadow-sm">
+          <Avatar className="size-12 rounded-2xl border-2 border-m-ink shadow-[var(--m-pop-sm)]">
             <AvatarImage src={`https://avatar.vercel.sh/${publicKey || "alex"}.png`} alt="Alex" />
             <AvatarFallback className="rounded-2xl bg-m-sky font-display text-lg font-bold text-m-blue">
               A
@@ -103,7 +113,7 @@ function DashboardPage() {
           </Avatar>
           <div>
             <h1 className="font-display text-2xl font-extrabold leading-tight">
-              Hey Alex! <span aria-hidden>👋</span>
+              Hey Alex!
             </h1>
             <p className="text-sm font-semibold text-muted-foreground">Ready to earn?</p>
           </div>
@@ -112,9 +122,9 @@ function DashboardPage() {
           type="button"
           onClick={() => navigate({ to: "/settings" })}
           aria-label="Notifications"
-          className="flex size-11 items-center justify-center rounded-2xl border border-border/60 bg-card text-foreground shadow-sm transition-transform active:scale-95"
+          className="press-pop flex size-11 items-center justify-center rounded-2xl border-2 border-m-ink bg-card text-foreground shadow-[var(--m-pop-sm)]"
         >
-          <Bell className="size-5" strokeWidth={2.4} />
+          <BellIcon className="size-5" weight="bold" />
         </button>
       </header>
 
@@ -125,41 +135,40 @@ function DashboardPage() {
       <button
         type="button"
         onClick={() => navigate({ to: "/history" })}
-        className="animate-pop-in flex w-full items-center gap-3 rounded-3xl border border-border/60 bg-card p-4 text-left shadow-sm transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-md active:scale-[0.99]"
+        className="animate-pop-in press-pop card-pop card-pop-butter flex w-full items-center gap-3 p-4 text-left"
       >
-        <span className="flex size-11 items-center justify-center rounded-2xl bg-m-butter text-xl shadow-sm">
-          <PiggyBank className="size-5 text-[oklch(0.55_0.12_78)]" strokeWidth={2.4} />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-muted-foreground">
+        <IconTile icon={PiggyBankIcon} tint="gold" bordered />
+        <div className="shrink-0">
+          <p className="text-microlabel whitespace-nowrap text-muted-foreground">
             My Stash
           </p>
-          <p className="font-display text-xl font-extrabold tabular-nums">
-            {stashBalance === null ? "…" : `${stashBalance.toFixed(2)} XLM`}
+          <p className="text-money whitespace-nowrap text-xl">
+            {stashBalance === null ? "…" : stashBalance.toFixed(2)}
+            <span className="ml-1 text-[11px] font-bold text-muted-foreground">
+              XLM
+            </span>
           </p>
         </div>
-        <span className="mr-1 flex flex-col items-end">
-          <span className="text-[11px] font-bold text-muted-foreground">
+        <span className="mr-1 flex min-w-0 flex-1 flex-col items-end">
+          <span className="max-w-full truncate text-[11px] font-bold text-muted-foreground">
             Goal: New Lego Set
           </span>
-          <span className="text-[11px] font-extrabold tabular-nums text-m-green-ink">
+          <span className="max-w-full truncate text-[11px] font-extrabold tabular-nums text-m-green-ink">
             {stashGoalTarget.toFixed(0)} XLM
           </span>
         </span>
-        <ChevronRight className="size-5 text-muted-foreground" strokeWidth={2.6} />
+        <CaretRightIcon className="size-5 shrink-0 text-muted-foreground" weight="bold" />
       </button>
 
       {/* Rewards mini-card → private-claim flow */}
       <button
         type="button"
         onClick={() => navigate({ to: "/rewards" })}
-        className="animate-pop-in flex w-full items-center gap-3 rounded-3xl border border-border/60 bg-card p-4 text-left shadow-sm transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-md active:scale-[0.99]"
+        className="animate-pop-in press-pop card-pop flex w-full items-center gap-3 p-4 text-left"
       >
-        <span className="flex size-11 items-center justify-center rounded-2xl bg-m-purple/12 text-xl shadow-sm">
-          <Gift className="size-5 text-m-purple" strokeWidth={2.4} />
-        </span>
+        <IconTile icon={GiftIcon} tint="purple" bordered />
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-muted-foreground">
+          <p className="text-microlabel text-muted-foreground">
             Rewards
           </p>
           <p className="font-display text-xl font-extrabold">
@@ -169,22 +178,22 @@ function DashboardPage() {
           </p>
         </div>
         {claimableCount > 0 && (
-          <span className="rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-extrabold text-m-green-ink">
+          <span className="rounded-full border-2 border-m-ink bg-primary/20 px-2.5 py-0.5 text-xs font-extrabold text-m-green-ink">
             {claimableCount}
           </span>
         )}
-        <ChevronRight className="size-5 text-muted-foreground" strokeWidth={2.6} />
+        <CaretRightIcon className="size-5 text-muted-foreground" weight="bold" />
       </button>
 
       {/* Today's Quests — real chores from the family store */}
       <section className="space-y-3">
         <div className="flex items-center justify-between px-1">
           <h2 className="flex items-center gap-1.5 font-display text-lg font-extrabold">
-            <Sparkles className="size-4 text-m-gold" strokeWidth={2.6} />
+            <SparkleIcon className="size-4 text-m-gold" weight="fill" />
             Today&apos;s Quests
           </h2>
           {quests.length > 0 && (
-            <span className="rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-extrabold text-m-green-ink">
+            <span className="rounded-full border-2 border-m-ink bg-primary/20 px-2.5 py-0.5 text-xs font-extrabold text-m-green-ink">
               {questsLeft} Left
             </span>
           )}
@@ -194,11 +203,9 @@ function DashboardPage() {
           <button
             type="button"
             onClick={() => navigate({ to: "/circles" })}
-            className="animate-pop-in flex w-full items-center gap-3 rounded-3xl border border-dashed border-border/70 bg-card/60 p-5 text-left transition-transform active:scale-[0.99]"
+            className="animate-pop-in press-pop card-pop card-pop-lilac flex w-full items-center gap-3 p-5 text-left"
           >
-            <span className="flex size-12 items-center justify-center rounded-2xl bg-m-lilac text-2xl shadow-sm">
-              👨‍👩‍👧‍👦
-            </span>
+            <IconTile icon={UsersIcon} tint="lilac" size="lg" bordered />
             <div className="min-w-0 flex-1">
               <p className="font-display text-[15px] font-extrabold">
                 Set up your family
@@ -207,13 +214,11 @@ function DashboardPage() {
                 Add chores and invite your kids to start earning.
               </p>
             </div>
-            <ChevronRight className="size-5 text-muted-foreground" strokeWidth={2.6} />
+            <CaretRightIcon className="size-5 text-muted-foreground" weight="bold" />
           </button>
         ) : quests.length === 0 ? (
-          <div className="rounded-3xl border border-dashed border-border/70 bg-card/60 p-6 text-center">
-            <span className="text-3xl" aria-hidden>
-              🧹
-            </span>
+          <div className="card-pop bg-card/70 p-6 text-center">
+            <IconTile icon={BroomIcon} tint="lilac" size="lg" className="mx-auto" />
             <p className="mt-2 font-display text-sm font-extrabold">
               No chores yet
             </p>
@@ -230,7 +235,7 @@ function DashboardPage() {
                 key={q.id}
                 title={q.title}
                 amount={q.amount}
-                icon={ListChecks}
+                icon={ListChecksIcon}
                 emoji={q.emoji}
                 tint={q.tint}
                 status={q.status}
@@ -255,7 +260,7 @@ function DashboardPage() {
       {/* Live-plumbing footer — proves the Stellar wallet + bindings are wired.
           Reads the family treasury's on-chain leaf index via the zwerc20 client
           and lets a demo user top up the in-app wallet from friendbot. */}
-      <footer className="rounded-3xl border border-border/60 bg-card/70 p-4 text-[11px] font-semibold text-muted-foreground shadow-sm">
+      <footer className="card-pop bg-card/70 p-4 text-[11px] font-semibold text-muted-foreground">
         <div className="flex items-center justify-between gap-3">
           <span>Wallet</span>
           <span className="font-mono tabular-nums">
@@ -284,7 +289,7 @@ function DashboardPage() {
           type="button"
           onClick={() => void fund()}
           disabled={isFunding}
-          className="mt-3 h-9 w-full rounded-full bg-primary/15 font-display text-xs font-extrabold text-m-green-ink transition-transform active:scale-[0.98] disabled:opacity-50"
+          className="press-pop mt-3 h-9 w-full rounded-full border-2 border-m-ink bg-primary/20 font-display text-xs font-extrabold text-m-green-ink disabled:opacity-50"
         >
           {isFunding ? "Funding…" : "Top up test XLM"}
         </button>

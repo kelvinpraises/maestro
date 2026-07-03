@@ -40,6 +40,17 @@
   --sidebar-border: oklch(0.9 0.02 295);
   --sidebar-ring: oklch(0.78 0.2 150);
 
+  /* ---- Soft-neubrutalism "card-pop" voice (from the design refs) ----
+     Every chunky card shares one warm near-black outline + one hard (blur-0)
+     offset shadow. Ink is a warm brown-black, never pure #000. */
+  --m-ink: oklch(0.24 0.03 60);                 /* warm brown-black outline */
+  --m-ink-soft: oklch(0.24 0.03 60 / 0.55);
+  --m-border-w: 2px;                             /* the one border weight */
+  --m-pop: 3px 3px 0 0 var(--m-ink);            /* the hard offset shadow */
+  --m-pop-sm: 2px 2px 0 0 var(--m-ink);
+  --m-pop-lg: 5px 5px 0 0 var(--m-ink);
+  --m-radius-pop: 1.4rem;                        /* the chunk radius */
+
   /* ---- Maestro named accents (use directly in components) ---- */
   --m-green: oklch(0.78 0.2 150);
   --m-green-ink: oklch(0.4 0.16 152);
@@ -116,6 +127,14 @@
   --sidebar-border: oklch(0.34 0.04 285);
   --sidebar-ring: oklch(0.8 0.2 150);
 
+  /* Card-pop voice, night variant: a near-black ink still, tuned for the dusk
+     canvas so outlines + hard shadows keep reading. */
+  --m-ink: oklch(0.12 0.02 60);
+  --m-ink-soft: oklch(0.12 0.02 60 / 0.6);
+  --m-pop: 3px 3px 0 0 var(--m-ink);
+  --m-pop-sm: 2px 2px 0 0 var(--m-ink);
+  --m-pop-lg: 5px 5px 0 0 var(--m-ink);
+
   --m-green: oklch(0.8 0.2 150);
   --m-green-ink: oklch(0.9 0.14 152);
   --m-blue: oklch(0.72 0.16 250);
@@ -169,6 +188,7 @@
   --color-transparent: transparent;
 
   /* Maestro named accent colors → utilities like bg-m-blue / text-m-gold */
+  --color-m-ink: var(--m-ink);
   --color-m-green: var(--m-green);
   --color-m-green-ink: var(--m-green-ink);
   --color-m-blue: var(--m-blue);
@@ -450,12 +470,12 @@
   .dark .bg-dot-pattern {
     background-image: radial-gradient(circle, rgba(255, 255, 255, 0.08) 1.4px, transparent 1.4px);
   }
-  /* Maestro app canvas: pale lavender + soft dot grid + gentle top glow */
+  /* Maestro app canvas: warm cream + soft dot grid (the refs' dotted paper). */
   .bg-maestro-canvas {
-    background-color: var(--background);
+    background-color: oklch(0.975 0.014 92);
     background-image:
-      radial-gradient(circle, rgba(99, 91, 154, 0.1) 1.3px, transparent 1.3px),
-      radial-gradient(120% 60% at 50% -10%, oklch(0.9 0.07 300 / 0.5), transparent 70%);
+      radial-gradient(circle, oklch(0.62 0.05 70 / 0.14) 1.4px, transparent 1.4px),
+      radial-gradient(120% 60% at 50% -10%, oklch(0.95 0.06 95 / 0.6), transparent 70%);
     background-size: 22px 22px, 100% 100%;
     background-position: 0 0, center top;
   }
@@ -466,6 +486,77 @@
   }
   .tabular-nums {
     font-variant-numeric: tabular-nums;
+  }
+
+  /* ── The card-pop voice ──────────────────────────────────────────────────
+     ONE recipe for every chunky card: warm-ink outline + hard offset shadow
+     (blur-0) + fat radius, on cream. `.card-pop` = the white/cream base; the
+     tint modifiers repaint the fill for chore-row style cards. */
+  .card-pop {
+    border: var(--m-border-w) solid var(--m-ink);
+    border-radius: var(--m-radius-pop);
+    box-shadow: var(--m-pop);
+    background-color: var(--card);
+    color: var(--card-foreground);
+  }
+  .card-pop-sm {
+    box-shadow: var(--m-pop-sm);
+  }
+  .card-pop-lg {
+    box-shadow: var(--m-pop-lg);
+  }
+  /* Flat-fill tint cards — the refs' pastel chore rows. Same outline+shadow. */
+  .card-pop-butter { background-color: var(--m-butter); }
+  .card-pop-mint   { background-color: var(--m-mint); }
+  .card-pop-pink   { background-color: var(--m-blush); }
+  .card-pop-sky    { background-color: var(--m-sky); }
+  .card-pop-lilac  { background-color: var(--m-lilac); }
+  .card-pop-green  { background-color: var(--m-green); color: var(--primary-foreground); }
+
+  /* Form fields in the same voice: ink-outlined (2px) inset field on
+     cream/white. No shadow — fields sit IN the page; cards sit ON it. */
+  .field-pop {
+    border: var(--m-border-w) solid var(--m-ink);
+    border-radius: 1rem;
+    background-color: var(--card);
+  }
+
+  /* The neubrutalist press: the whole element gets physically pushed into its
+     own shadow (translate down-right + shadow shrinks) and squishes a touch. */
+  .press-pop {
+    transition:
+      transform 140ms cubic-bezier(0.34, 1.56, 0.64, 1),
+      box-shadow 140ms ease-out,
+      filter 140ms ease-out;
+  }
+  .press-pop:active {
+    transform: translate(2px, 2px) scale(0.98);
+    box-shadow: var(--m-pop-sm);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .press-pop { transition: none; }
+    .press-pop:active { transform: none; }
+  }
+
+  /* ── Type as architecture ────────────────────────────────────────────────
+     Three voices, codified so screens stop hand-rolling them. */
+  .text-money {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+  .text-microlabel {
+    font-size: 11px;
+    line-height: 1.2;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+  }
+  .text-body-soft {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    text-wrap: pretty;
   }
   .font-display, .font-baloo {
     font-family: var(--font-baloo);

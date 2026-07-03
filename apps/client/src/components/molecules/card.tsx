@@ -2,12 +2,30 @@ import * as React from "react";
 
 import { cn } from "@/utils";
 
-function Card({ className, ...props }: React.ComponentProps<"div">) {
+type CardTint = "butter" | "mint" | "pink" | "sky" | "lilac" | "green";
+
+const cardTints: Record<CardTint, string> = {
+  butter: "card-pop-butter",
+  mint: "card-pop-mint",
+  pink: "card-pop-pink",
+  sky: "card-pop-sky",
+  lilac: "card-pop-lilac",
+  green: "card-pop-green",
+};
+
+// The single card voice: chunky ink outline + hard offset shadow on cream
+// (soft neubrutalism). Pass `tint` for the refs' pastel flat-fill cards.
+function Card({
+  className,
+  tint,
+  ...props
+}: React.ComponentProps<"div"> & { tint?: CardTint }) {
   return (
     <div
       data-slot="card"
       className={cn(
-        "bg-card text-card-foreground gap-6 rounded-3xl border border-border/60 py-2 shadow-sm",
+        "card-pop gap-6 py-2",
+        tint && cardTints[tint],
         className,
       )}
       {...props}

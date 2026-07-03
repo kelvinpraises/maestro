@@ -1,15 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import {
-  Gift,
-  Plus,
-  Minus,
-  Sparkles,
-  Loader2,
-  ShieldCheck,
-  PartyPopper,
-  Lock,
-} from "lucide-react";
+  GiftIcon,
+  PlusIcon,
+  MinusIcon,
+  SparkleIcon,
+  SpinnerGapIcon,
+  ShieldCheckIcon,
+  ConfettiIcon,
+  LockIcon,
+} from "@phosphor-icons/react";
+import { IconTile } from "@/components/atoms/icon-tile";
 import { cn } from "@/utils";
 import {
   useFundReward,
@@ -57,19 +58,19 @@ function RewardsPage() {
       </header>
 
       {/* ── Fund a reward (parent) ─────────────────────────────────────────── */}
-      <section className="space-y-3 rounded-[1.6rem] border border-border/60 bg-card p-4 shadow-sm">
+      <section className="space-y-3 card-pop p-4">
         <h2 className="flex items-center gap-1.5 font-display text-lg font-extrabold">
-          <Gift className="size-4 text-m-purple" strokeWidth={2.6} />
+          <GiftIcon className="size-4 text-m-purple" weight="duotone" />
           Fund a reward
         </h2>
 
         {/* Amount stepper */}
-        <div className="flex items-center justify-between rounded-2xl bg-muted/60 px-3.5 py-3">
+        <div className="field-pop flex items-center justify-between px-3.5 py-3">
           <div>
-            <p className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-muted-foreground">
+            <p className="text-microlabel text-muted-foreground">
               Reward
             </p>
-            <p className="font-display text-lg font-extrabold tabular-nums text-m-green-ink">
+            <p className="text-money text-lg text-m-green-ink">
               {amount.toFixed(2)} XLM
             </p>
           </div>
@@ -85,7 +86,7 @@ function RewardsPage() {
           value={label}
           onChange={(e) => setLabel(e.target.value.slice(0, 40))}
           placeholder="What's it for? (e.g. Cleaned room)"
-          className="w-full rounded-2xl border-2 border-border bg-card px-3.5 py-3 font-display text-sm font-bold placeholder:text-muted-foreground/70 focus:border-m-purple focus:outline-none"
+          className="field-pop w-full px-3.5 py-3 font-display text-sm font-bold placeholder:text-muted-foreground/70 focus:outline-none focus-visible:ring-[3px] focus-visible:ring-m-purple/50"
         />
 
         <button
@@ -97,23 +98,23 @@ function RewardsPage() {
               { onSuccess: () => setLabel("") },
             )
           }
-          className="flex h-13 w-full items-center justify-center gap-2 rounded-full bg-m-purple py-3.5 font-display text-base font-extrabold text-white shadow-lg transition-[transform,filter] hover:brightness-105 active:scale-[0.97] disabled:opacity-50"
+          className="press-pop flex h-13 w-full items-center justify-center gap-2 rounded-full border-2 border-m-ink bg-m-purple py-3.5 font-display text-base font-extrabold text-white shadow-[var(--m-pop)] hover:brightness-105 disabled:opacity-50"
         >
           {fund.isPending ? (
             <>
-              <Loader2 className="size-5 animate-spin" strokeWidth={2.6} />
+              <SpinnerGapIcon className="size-5 animate-spin" weight="bold" />
               Tucking it away…
             </>
           ) : (
             <>
-              <Plus className="size-5" strokeWidth={2.8} />
+              <PlusIcon className="size-5" weight="bold" />
               Fund reward
             </>
           )}
         </button>
         {fund.isSuccess && (
           <p className="flex items-center justify-center gap-1.5 text-center text-[13px] font-extrabold text-m-green-ink">
-            <Lock className="size-3.5" strokeWidth={2.8} />
+            <LockIcon className="size-3.5" weight="bold" />
             Reward hidden in the treasury — ready to claim! ✨
           </p>
         )}
@@ -128,11 +129,11 @@ function RewardsPage() {
       <section className="space-y-3">
         <div className="flex items-center justify-between px-1">
           <h2 className="flex items-center gap-1.5 font-display text-lg font-extrabold">
-            <Sparkles className="size-4 text-m-gold" strokeWidth={2.6} />
+            <SparkleIcon className="size-4 text-m-gold" weight="fill" />
             Claimable rewards
           </h2>
           {claimable.length > 0 && (
-            <span className="rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-extrabold text-m-green-ink">
+            <span className="rounded-full border-2 border-m-ink bg-primary/20 px-2.5 py-0.5 text-xs font-extrabold text-m-green-ink">
               {claimable.length} ready
             </span>
           )}
@@ -161,11 +162,10 @@ function RewardsPage() {
             {claimed.map((r) => (
               <div
                 key={r.id}
-                className="flex items-center gap-3 rounded-3xl border border-border/60 bg-muted/40 p-3.5 opacity-70"
+                className="flex items-center gap-3 card-pop bg-muted/40 p-3.5 opacity-70"
               >
-                <span className="flex size-10 items-center justify-center rounded-2xl bg-primary/15 text-lg">
-                  ✅
-                </span>
+                <IconTile icon={ShieldCheckIcon} tint="green" />
+
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-display text-sm font-extrabold">
                     {r.label || "Private reward"}
@@ -194,17 +194,15 @@ function ClaimableCard({ reward }: { reward: RewardView }) {
   const stepLabel = CLAIM_STEP_LABEL[claim.step];
 
   return (
-    <div className="animate-pop-in rounded-3xl border border-border/60 bg-card p-3.5 shadow-sm">
+    <div className="animate-pop-in card-pop p-3.5">
       <div className="flex items-center gap-3">
-        <span className="flex size-11 items-center justify-center rounded-2xl bg-m-purple/12 text-xl shadow-sm">
-          🎁
-        </span>
+        <IconTile icon={GiftIcon} tint="purple" bordered />
         <div className="min-w-0 flex-1">
           <p className="truncate font-display text-[15px] font-extrabold">
             {reward.label || "Private reward"}
           </p>
           <p className="flex items-center gap-1 text-[11px] font-bold text-muted-foreground">
-            <ShieldCheck className="size-3" strokeWidth={2.8} />
+            <ShieldCheckIcon className="size-3" weight="bold" />
             Private claim
           </p>
         </div>
@@ -220,21 +218,21 @@ function ClaimableCard({ reward }: { reward: RewardView }) {
         type="button"
         disabled={busy || claim.isSuccess}
         onClick={() => claim.mutate({ note: reward })}
-        className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-primary font-display text-sm font-extrabold text-primary-foreground shadow-md transition-[transform,filter] hover:brightness-[1.04] active:scale-[0.97] disabled:opacity-60"
+        className="press-pop mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-full border-2 border-m-ink bg-primary font-display text-sm font-extrabold text-primary-foreground shadow-[var(--m-pop)] hover:brightness-[1.03] disabled:opacity-60"
       >
         {claim.isSuccess ? (
           <>
-            <PartyPopper className="size-4" strokeWidth={2.8} />
+            <ConfettiIcon className="size-4" weight="fill" />
             Claimed {reward.amountXlm.toFixed(2)} XLM!
           </>
         ) : busy ? (
           <>
-            <Loader2 className="size-4 animate-spin" strokeWidth={2.8} />
+            <SpinnerGapIcon className="size-4 animate-spin" weight="bold" />
             {stepLabel}
           </>
         ) : (
           <>
-            <Lock className="size-4" strokeWidth={2.8} />
+            <LockIcon className="size-4" weight="bold" />
             Claim privately
           </>
         )}
@@ -250,10 +248,8 @@ function ClaimableCard({ reward }: { reward: RewardView }) {
 
 function EmptyState() {
   return (
-    <div className="rounded-3xl border border-dashed border-border/70 bg-card/60 p-6 text-center">
-      <span className="text-3xl" aria-hidden>
-        🎈
-      </span>
+    <div className="card-pop bg-card/70 p-6 text-center">
+      <IconTile icon={GiftIcon} tint="lilac" size="lg" className="mx-auto" />
       <p className="mt-2 font-display text-sm font-extrabold">No rewards yet</p>
       <p className="mt-0.5 text-[13px] font-bold text-muted-foreground text-pretty">
         Fund a reward above and it shows up here, ready for a private claim.
@@ -264,7 +260,7 @@ function EmptyState() {
 
 function SkeletonCard() {
   return (
-    <div className="h-[92px] animate-pulse rounded-3xl border border-border/60 bg-muted/50" />
+    <div className="h-[92px] animate-pulse card-pop bg-muted/50" />
   );
 }
 
@@ -283,16 +279,16 @@ function Stepper({
       aria-label={label}
       onClick={onClick}
       className={cn(
-        "flex size-9 items-center justify-center rounded-full shadow-sm transition-transform active:scale-90",
+        "press-pop flex size-9 items-center justify-center rounded-full border-2 border-m-ink shadow-[var(--m-pop-sm)]",
         variant === "primary"
           ? "bg-primary text-primary-foreground"
           : "bg-muted text-foreground",
       )}
     >
       {variant === "primary" ? (
-        <Plus className="size-4" strokeWidth={3} />
+        <PlusIcon className="size-4" weight="bold" />
       ) : (
-        <Minus className="size-4" strokeWidth={3} />
+        <MinusIcon className="size-4" weight="bold" />
       )}
     </button>
   );

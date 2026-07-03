@@ -13,18 +13,21 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useCallback, useMemo } from "react";
 import {
-  Plus,
-  Users,
-  Copy,
-  CheckCircle2,
-  Share2,
-  Trash2,
-  Loader2,
-  Gift,
-  Link2,
-  Sparkles,
-  UserPlus,
-} from "lucide-react";
+  PlusIcon,
+  UsersIcon,
+  CopyIcon,
+  CheckCircleIcon,
+  ShareNetworkIcon,
+  TrashIcon,
+  SpinnerGapIcon,
+  GiftIcon,
+  LinkIcon,
+  SparkleIcon,
+  UserPlusIcon,
+  BroomIcon,
+  LockIcon,
+} from "@phosphor-icons/react";
+import { EmojiTile, IconTile } from "@/components/atoms/icon-tile";
 import { toast } from "sonner";
 import { Button } from "@/components/atoms/button";
 import { Input } from "@/components/atoms/input";
@@ -119,8 +122,8 @@ function SetupCard({
 
   return (
     <div className="stagger-rise flex flex-col items-center gap-6 pt-6 text-center">
-      <div className="flex size-24 items-center justify-center rounded-[1.9rem] bg-m-lilac text-5xl shadow-inner">
-        👨‍👩‍👧‍👦
+      <div className="flex size-24 items-center justify-center rounded-[1.9rem] border-2 border-m-ink bg-m-lilac shadow-[var(--m-pop)]">
+        <UsersIcon className="size-11 text-m-purple" weight="duotone" />
       </div>
       <div>
         <h1 className="font-display text-3xl font-extrabold tracking-tight">
@@ -132,7 +135,7 @@ function SetupCard({
         </p>
       </div>
 
-      <div className="w-full space-y-3.5 rounded-[1.75rem] border border-border/60 bg-card p-5 text-left shadow-sm">
+      <div className="w-full space-y-3.5 card-pop p-5 text-left">
         <div>
           <Label className="mb-2">Family name</Label>
           <Input
@@ -152,7 +155,7 @@ function SetupCard({
           />
         </div>
         <Button onClick={handleCreate} size="lg" className="w-full">
-          <Sparkles className="mr-2 size-5" strokeWidth={2.6} />
+          <SparkleIcon className="mr-2 size-5" weight="fill" />
           Create family
         </Button>
       </div>
@@ -213,13 +216,13 @@ function ChoresSection({
     <section className="space-y-3">
       <div className="flex items-center justify-between px-1">
         <h2 className="flex items-center gap-1.5 font-display text-lg font-extrabold">
-          <Sparkles className="size-4 text-m-gold" strokeWidth={2.6} />
+          <SparkleIcon className="size-4 text-m-gold" weight="fill" />
           Chores
         </h2>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <button className="flex size-9 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-md transition-transform active:scale-95">
-              <Plus className="size-4" strokeWidth={2.8} />
+            <button className="press-pop flex size-9 shrink-0 items-center justify-center rounded-2xl border-2 border-m-ink bg-primary text-primary-foreground shadow-[var(--m-pop-sm)]">
+              <PlusIcon className="size-4" weight="bold" />
             </button>
           </DialogTrigger>
           <DialogContent>
@@ -248,10 +251,10 @@ function ChoresSection({
                       type="button"
                       onClick={() => setEmoji(e)}
                       className={cn(
-                        "flex size-10 items-center justify-center rounded-2xl text-xl shadow-sm transition-transform active:scale-90",
+                        "press-pop flex size-10 items-center justify-center rounded-[12px] border-2 text-xl",
                         emoji === e
-                          ? "bg-primary/20 ring-2 ring-primary"
-                          : "bg-muted",
+                          ? "border-m-ink bg-primary/20 shadow-[var(--m-pop-sm)]"
+                          : "border-transparent bg-muted",
                       )}
                     >
                       <span aria-hidden>{e}</span>
@@ -267,11 +270,11 @@ function ChoresSection({
                     onClick={() =>
                       setReward((v) => Math.max(0.1, Math.round((v - 0.5) * 100) / 100))
                     }
-                    className="flex size-10 items-center justify-center rounded-full bg-muted font-display text-lg font-extrabold shadow-sm active:scale-90"
+                    className="press-pop flex size-10 items-center justify-center rounded-full border-2 border-m-ink bg-muted font-display text-lg font-extrabold shadow-[var(--m-pop-sm)]"
                   >
                     −
                   </button>
-                  <span className="flex-1 text-center font-display text-xl font-extrabold tabular-nums text-m-green-ink">
+                  <span className="flex-1 text-center text-money text-xl text-m-green-ink">
                     {reward.toFixed(2)}
                   </span>
                   <button
@@ -279,7 +282,7 @@ function ChoresSection({
                     onClick={() =>
                       setReward((v) => Math.round((v + 0.5) * 100) / 100)
                     }
-                    className="flex size-10 items-center justify-center rounded-full bg-primary text-primary-foreground font-display text-lg font-extrabold shadow-sm active:scale-90"
+                    className="press-pop flex size-10 items-center justify-center rounded-full border-2 border-m-ink bg-primary text-primary-foreground font-display text-lg font-extrabold shadow-[var(--m-pop-sm)]"
                   >
                     +
                   </button>
@@ -291,7 +294,7 @@ function ChoresSection({
                 Cancel
               </Button>
               <Button onClick={handleAdd}>
-                <Plus className="mr-2 size-4" />
+                <PlusIcon className="mr-2 size-4" weight="bold" />
                 Add chore
               </Button>
             </DialogFooter>
@@ -300,10 +303,8 @@ function ChoresSection({
       </div>
 
       {family.chores.length === 0 ? (
-        <div className="rounded-3xl border border-dashed border-border/70 bg-card/60 p-6 text-center">
-          <span className="text-3xl" aria-hidden>
-            🧹
-          </span>
+        <div className="card-pop bg-card/70 p-6 text-center">
+          <IconTile icon={BroomIcon} tint="lilac" size="lg" className="mx-auto" />
           <p className="mt-2 font-display text-sm font-extrabold">No chores yet</p>
           <p className="mt-0.5 text-[13px] font-bold text-muted-foreground text-pretty">
             Add a chore and it shows up on everyone&apos;s home screen.
@@ -314,11 +315,9 @@ function ChoresSection({
           {family.chores.map((c) => (
             <div
               key={c.id}
-              className="flex items-center gap-3 rounded-3xl border border-border/60 bg-card p-3 shadow-sm"
+              className="flex items-center gap-3 card-pop p-3"
             >
-              <span className="flex size-11 items-center justify-center rounded-2xl bg-muted text-xl shadow-sm">
-                <span aria-hidden>{c.emoji}</span>
-              </span>
+              <EmojiTile emoji={c.emoji} tint="neutral" bordered />
               <div className="min-w-0 flex-1">
                 <p className="truncate font-display text-[15px] font-extrabold">
                   {c.name}
@@ -331,9 +330,9 @@ function ChoresSection({
                 type="button"
                 aria-label={`Remove ${c.name}`}
                 onClick={() => removeChore(c.id)}
-                className="flex size-9 items-center justify-center rounded-full bg-muted text-muted-foreground shadow-sm transition-colors hover:text-m-pink active:scale-90"
+                className="press-pop flex size-9 items-center justify-center rounded-full border-2 border-m-ink bg-muted text-muted-foreground shadow-[var(--m-pop-sm)] hover:text-m-pink"
               >
-                <Trash2 className="size-4" strokeWidth={2.4} />
+                <TrashIcon className="size-4" weight="bold" />
               </button>
             </div>
           ))}
@@ -390,7 +389,7 @@ function KidsSection({
     <section className="space-y-3">
       <div className="flex items-center justify-between px-1">
         <h2 className="flex items-center gap-1.5 font-display text-lg font-extrabold">
-          <Users className="size-4 text-m-purple" strokeWidth={2.6} />
+          <UsersIcon className="size-4 text-m-purple" weight="duotone" />
           Kids
         </h2>
       </div>
@@ -399,9 +398,9 @@ function KidsSection({
         {family.kidNames.map((k) => (
           <div
             key={k}
-            className="flex items-center gap-3 rounded-3xl border border-border/60 bg-card p-3 shadow-sm"
+            className="flex items-center gap-3 card-pop p-3"
           >
-            <span className="flex size-11 items-center justify-center rounded-2xl bg-m-sky font-display text-lg font-extrabold text-m-blue shadow-sm">
+            <span className="flex size-11 items-center justify-center rounded-[13px] border-2 border-m-ink bg-m-sky font-display text-lg font-extrabold text-m-blue shadow-[var(--m-pop-sm)]">
               {k.charAt(0).toUpperCase()}
             </span>
             <p className="min-w-0 flex-1 truncate font-display text-[15px] font-extrabold">
@@ -413,9 +412,9 @@ function KidsSection({
                 setInviteFor(k);
                 setCopied(false);
               }}
-              className="flex items-center gap-1.5 rounded-full bg-primary/15 px-3 py-1.5 text-xs font-extrabold text-m-green-ink transition-transform active:scale-95"
+              className="press-pop flex items-center gap-1.5 rounded-full border-2 border-m-ink bg-primary/20 px-3 py-1.5 text-xs font-extrabold text-m-green-ink"
             >
-              <Link2 className="size-3.5" strokeWidth={2.8} />
+              <LinkIcon className="size-3.5" weight="bold" />
               Invite
             </button>
           </div>
@@ -443,9 +442,9 @@ function KidsSection({
                 setNewKid("");
               }
             }}
-            className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-md transition-transform active:scale-95"
+            className="press-pop flex size-11 shrink-0 items-center justify-center rounded-2xl border-2 border-m-ink bg-primary text-primary-foreground shadow-[var(--m-pop-sm)]"
           >
-            <UserPlus className="size-5" strokeWidth={2.6} />
+            <UserPlusIcon className="size-5" weight="bold" />
           </button>
         </div>
       </div>
@@ -462,7 +461,7 @@ function KidsSection({
           </DialogHeader>
           <button
             onClick={handleCopy}
-            className="w-full rounded-2xl border border-border/60 bg-muted/30 px-4 py-3.5 text-left transition-colors hover:bg-muted/50"
+            className="press-pop w-full rounded-2xl border-2 border-m-ink bg-muted/40 px-4 py-3.5 text-left"
           >
             <p className="break-all font-mono text-xs leading-relaxed text-muted-foreground">
               {inviteLink}
@@ -470,12 +469,12 @@ function KidsSection({
             <span className="mt-2.5 flex items-center gap-1.5 text-xs font-bold">
               {copied ? (
                 <span className="flex items-center gap-1.5 text-m-green-ink">
-                  <CheckCircle2 className="size-3.5" />
+                  <CheckCircleIcon className="size-3.5" weight="fill" />
                   Copied!
                 </span>
               ) : (
                 <span className="flex items-center gap-1.5 text-muted-foreground">
-                  <Copy className="size-3.5" />
+                  <CopyIcon className="size-3.5" weight="bold" />
                   Tap to copy
                 </span>
               )}
@@ -483,7 +482,7 @@ function KidsSection({
           </button>
           {typeof navigator !== "undefined" && !!navigator.share && (
             <Button variant="outline" onClick={handleShare} className="w-full">
-              <Share2 className="mr-2 size-4" />
+              <ShareNetworkIcon className="mr-2 size-4" weight="bold" />
               Share
             </Button>
           )}
@@ -545,7 +544,7 @@ function RewardSection({
     <section className="space-y-3">
       <div className="flex items-center justify-between px-1">
         <h2 className="flex items-center gap-1.5 font-display text-lg font-extrabold">
-          <Gift className="size-4 text-m-purple" strokeWidth={2.6} />
+          <GiftIcon className="size-4 text-m-purple" weight="duotone" />
           Send a reward
         </h2>
       </div>
@@ -562,11 +561,9 @@ function RewardSection({
               type="button"
               disabled={fund.isPending}
               onClick={() => handleFund(c)}
-              className="flex w-full items-center gap-3 rounded-3xl border border-border/60 bg-card p-3 text-left shadow-sm transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-md active:scale-[0.99] disabled:opacity-60"
+              className="press-pop card-pop flex w-full items-center gap-3 p-3 text-left disabled:opacity-60"
             >
-              <span className="flex size-11 items-center justify-center rounded-2xl bg-m-purple/12 text-xl shadow-sm">
-                <span aria-hidden>{c.emoji}</span>
-              </span>
+              <EmojiTile emoji={c.emoji} tint="purple" bordered />
               <div className="min-w-0 flex-1">
                 <p className="truncate font-display text-[15px] font-extrabold">
                   {c.name}
@@ -576,10 +573,10 @@ function RewardSection({
                 </p>
               </div>
               {fund.isPending && chore?.id === c.id ? (
-                <Loader2 className="size-5 animate-spin text-m-purple" />
+                <SpinnerGapIcon className="size-5 animate-spin text-m-purple" weight="bold" />
               ) : (
-                <span className="flex items-center gap-1.5 rounded-full bg-m-purple/15 px-3 py-1.5 text-xs font-extrabold text-m-purple">
-                  <Gift className="size-3.5" strokeWidth={2.8} />
+                <span className="flex items-center gap-1.5 rounded-full border-2 border-m-ink bg-m-purple/15 px-3 py-1.5 text-xs font-extrabold text-m-purple">
+                  <GiftIcon className="size-3.5" weight="duotone" />
                   Reward
                 </span>
               )}
@@ -604,7 +601,7 @@ function RewardSection({
           </DialogHeader>
           <button
             onClick={handleCopy}
-            className="w-full rounded-2xl border border-border/60 bg-muted/30 px-4 py-3.5 text-left transition-colors hover:bg-muted/50"
+            className="press-pop w-full rounded-2xl border-2 border-m-ink bg-muted/40 px-4 py-3.5 text-left"
           >
             <p className="break-all font-mono text-xs leading-relaxed text-muted-foreground">
               {claimLink}
@@ -612,12 +609,12 @@ function RewardSection({
             <span className="mt-2.5 flex items-center gap-1.5 text-xs font-bold">
               {copied ? (
                 <span className="flex items-center gap-1.5 text-m-green-ink">
-                  <CheckCircle2 className="size-3.5" />
+                  <CheckCircleIcon className="size-3.5" weight="fill" />
                   Copied!
                 </span>
               ) : (
                 <span className="flex items-center gap-1.5 text-muted-foreground">
-                  <Copy className="size-3.5" />
+                  <CopyIcon className="size-3.5" weight="bold" />
                   Tap to copy
                 </span>
               )}
@@ -625,12 +622,13 @@ function RewardSection({
           </button>
           {typeof navigator !== "undefined" && !!navigator.share && (
             <Button variant="outline" onClick={handleShare} className="w-full">
-              <Share2 className="mr-2 size-4" />
+              <ShareNetworkIcon className="mr-2 size-4" weight="bold" />
               Share
             </Button>
           )}
-          <p className="text-center text-[11px] font-semibold text-muted-foreground/70">
-            🔒 Only someone with this link can claim the reward.
+          <p className="flex items-center justify-center gap-1 text-center text-[11px] font-semibold text-muted-foreground/70">
+            <LockIcon className="size-3" weight="fill" />
+            Only someone with this link can claim the reward.
           </p>
         </DialogContent>
       </Dialog>
@@ -649,14 +647,12 @@ function KidView({
     <>
       <section className="space-y-3">
         <h2 className="flex items-center gap-1.5 px-1 font-display text-lg font-extrabold">
-          <Sparkles className="size-4 text-m-gold" strokeWidth={2.6} />
+          <SparkleIcon className="size-4 text-m-gold" weight="fill" />
           My chores
         </h2>
         {family.chores.length === 0 ? (
-          <div className="rounded-3xl border border-dashed border-border/70 bg-card/60 p-6 text-center">
-            <span className="text-3xl" aria-hidden>
-              🎈
-            </span>
+          <div className="card-pop bg-card/70 p-6 text-center">
+            <IconTile icon={BroomIcon} tint="lilac" size="lg" className="mx-auto" />
             <p className="mt-2 font-display text-sm font-extrabold">
               No chores yet
             </p>
@@ -669,11 +665,9 @@ function KidView({
             {family.chores.map((c) => (
               <div
                 key={c.id}
-                className="flex items-center gap-3 rounded-3xl border border-border/60 bg-card p-3 shadow-sm"
+                className="flex items-center gap-3 card-pop p-3"
               >
-                <span className="flex size-11 items-center justify-center rounded-2xl bg-muted text-xl shadow-sm">
-                  <span aria-hidden>{c.emoji}</span>
-                </span>
+                <EmojiTile emoji={c.emoji} tint="neutral" bordered />
                 <p className="min-w-0 flex-1 truncate font-display text-[15px] font-extrabold">
                   {c.name}
                 </p>
