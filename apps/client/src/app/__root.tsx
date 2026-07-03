@@ -14,7 +14,8 @@ function RootLayout() {
   const location = useLocation();
   const isHomePage = location.pathname === "/";
   const isFullscreenRoute =
-    location.pathname.startsWith("/circles/join") ||
+    location.pathname.startsWith("/join") ||
+    location.pathname.startsWith("/claim-link") ||
     location.pathname.startsWith("/oauth/") ||
     location.pathname.startsWith("/claim/");
 
@@ -28,11 +29,16 @@ function RootLayout() {
   }
 
   if (isHomePage || isFullscreenRoute) {
-    const isClaimRoute = location.pathname.startsWith("/claim/");
+    // Kid-facing entry points (claim page, family invite, reward claim link)
+    // shouldn't be gated behind the grown-up password dialog.
+    const skipPassword =
+      location.pathname.startsWith("/claim/") ||
+      location.pathname.startsWith("/claim-link") ||
+      location.pathname.startsWith("/join");
     return (
       <RootProvider>
         <Outlet />
-        {!isClaimRoute && <PasswordDialog />}
+        {!skipPassword && <PasswordDialog />}
         <Toaster />
       </RootProvider>
     );

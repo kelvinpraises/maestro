@@ -86,7 +86,7 @@ function MePage() {
           icon={Users}
           tint="bg-m-lilac"
           iconColor="text-m-purple"
-          label="My team"
+          label="My family"
           onClick={() => navigate({ to: "/circles" })}
         />
       </section>

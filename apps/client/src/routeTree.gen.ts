@@ -12,9 +12,11 @@ import { Route as rootRouteImport } from './app/__root'
 import { Route as WalletRouteImport } from './app/wallet'
 import { Route as SettingsRouteImport } from './app/settings'
 import { Route as ProposalsRouteImport } from './app/proposals'
+import { Route as JoinRouteImport } from './app/join'
 import { Route as HistoryRouteImport } from './app/history'
 import { Route as DashboardRouteImport } from './app/dashboard'
 import { Route as ContactsRouteImport } from './app/contacts'
+import { Route as ClaimLinkRouteImport } from './app/claim-link'
 import { Route as IndexRouteImport } from './app/index'
 import { Route as YieldboxIndexRouteImport } from './app/yieldbox/index'
 import { Route as StreamsIndexRouteImport } from './app/streams/index'
@@ -41,6 +43,11 @@ const ProposalsRoute = ProposalsRouteImport.update({
   path: '/proposals',
   getParentRoute: () => rootRouteImport,
 } as any)
+const JoinRoute = JoinRouteImport.update({
+  id: '/join',
+  path: '/join',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const HistoryRoute = HistoryRouteImport.update({
   id: '/history',
   path: '/history',
@@ -54,6 +61,11 @@ const DashboardRoute = DashboardRouteImport.update({
 const ContactsRoute = ContactsRouteImport.update({
   id: '/contacts',
   path: '/contacts',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ClaimLinkRoute = ClaimLinkRouteImport.update({
+  id: '/claim-link',
+  path: '/claim-link',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -109,9 +121,11 @@ const CirclesCircleIdRoute = CirclesCircleIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/claim-link': typeof ClaimLinkRoute
   '/contacts': typeof ContactsRoute
   '/dashboard': typeof DashboardRoute
   '/history': typeof HistoryRoute
+  '/join': typeof JoinRoute
   '/proposals': typeof ProposalsRoute
   '/settings': typeof SettingsRoute
   '/wallet': typeof WalletRoute
@@ -127,9 +141,11 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/claim-link': typeof ClaimLinkRoute
   '/contacts': typeof ContactsRoute
   '/dashboard': typeof DashboardRoute
   '/history': typeof HistoryRoute
+  '/join': typeof JoinRoute
   '/proposals': typeof ProposalsRoute
   '/settings': typeof SettingsRoute
   '/wallet': typeof WalletRoute
@@ -146,9 +162,11 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/claim-link': typeof ClaimLinkRoute
   '/contacts': typeof ContactsRoute
   '/dashboard': typeof DashboardRoute
   '/history': typeof HistoryRoute
+  '/join': typeof JoinRoute
   '/proposals': typeof ProposalsRoute
   '/settings': typeof SettingsRoute
   '/wallet': typeof WalletRoute
@@ -166,9 +184,11 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/claim-link'
     | '/contacts'
     | '/dashboard'
     | '/history'
+    | '/join'
     | '/proposals'
     | '/settings'
     | '/wallet'
@@ -184,9 +204,11 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/claim-link'
     | '/contacts'
     | '/dashboard'
     | '/history'
+    | '/join'
     | '/proposals'
     | '/settings'
     | '/wallet'
@@ -202,9 +224,11 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/claim-link'
     | '/contacts'
     | '/dashboard'
     | '/history'
+    | '/join'
     | '/proposals'
     | '/settings'
     | '/wallet'
@@ -221,9 +245,11 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ClaimLinkRoute: typeof ClaimLinkRoute
   ContactsRoute: typeof ContactsRoute
   DashboardRoute: typeof DashboardRoute
   HistoryRoute: typeof HistoryRoute
+  JoinRoute: typeof JoinRoute
   ProposalsRoute: typeof ProposalsRoute
   SettingsRoute: typeof SettingsRoute
   WalletRoute: typeof WalletRoute
@@ -261,6 +287,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProposalsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/join': {
+      id: '/join'
+      path: '/join'
+      fullPath: '/join'
+      preLoaderRoute: typeof JoinRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/history': {
       id: '/history'
       path: '/history'
@@ -280,6 +313,13 @@ declare module '@tanstack/react-router' {
       path: '/contacts'
       fullPath: '/contacts'
       preLoaderRoute: typeof ContactsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/claim-link': {
+      id: '/claim-link'
+      path: '/claim-link'
+      fullPath: '/claim-link'
+      preLoaderRoute: typeof ClaimLinkRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -357,9 +397,11 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ClaimLinkRoute: ClaimLinkRoute,
   ContactsRoute: ContactsRoute,
   DashboardRoute: DashboardRoute,
   HistoryRoute: HistoryRoute,
+  JoinRoute: JoinRoute,
   ProposalsRoute: ProposalsRoute,
   SettingsRoute: SettingsRoute,
   WalletRoute: WalletRoute,

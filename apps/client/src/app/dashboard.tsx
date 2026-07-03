@@ -1,36 +1,22 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Bell, Sparkles, Bed, Trash2, Utensils, Dog, PiggyBank, ChevronRight, Gift } from "lucide-react";
+import { Bell, Sparkles, ListChecks, PiggyBank, ChevronRight, Gift } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { WelcomeDialog } from "@/components/organisms/welcome-dialog";
 import { EarningsHero } from "@/components/organisms/earnings-hero";
-import { QuestCard, type QuestTint, type QuestStatus } from "@/components/molecules/quest-card";
+import { QuestCard, type QuestTint } from "@/components/molecules/quest-card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/atoms/avatar";
 import { useStellarWallet } from "@/providers/stellar-wallet-provider";
 import { useMyRewards } from "@/hooks/use-rewards";
+import { useFamily, useChoreStates } from "@/hooks/use-family";
 import { zwerc20 } from "@/contracts/stellar";
 
 export const Route = createFileRoute("/dashboard")({
   component: DashboardPage,
 });
 
-// Sample quests for the kid home. Presentational only — the contract-wiring
-// workstream will map these onto real chore/stream data.
-type Quest = {
-  id: string;
-  title: string;
-  amount: number;
-  icon: typeof Bed;
-  emoji: string;
-  tint: QuestTint;
-  status: QuestStatus;
-};
-
-const SAMPLE_QUESTS: Quest[] = [
-  { id: "bed", title: "Make the Bed", amount: 2, icon: Bed, emoji: "🛏️", tint: "blue", status: "todo" },
-  { id: "trash", title: "Take out Trash", amount: 1, icon: Trash2, emoji: "🗑️", tint: "purple", status: "todo" },
-  { id: "dishes", title: "Wash Dishes", amount: 1.5, icon: Utensils, emoji: "🍽️", tint: "pink", status: "pending" },
-  { id: "dog", title: "Walk the Dog", amount: 2.5, icon: Dog, emoji: "🐕", tint: "green", status: "todo" },
-];
+// Rotating pastel tints so a family's chores stay colorful without the parent
+// picking a color per chore.
+const QUEST_TINTS: QuestTint[] = ["blue", "purple", "pink", "green", "gold"];
 
 function DashboardPage() {
   const navigate = useNavigate();
@@ -69,7 +55,24 @@ function DashboardPage() {
   // "Stash" savings-goal target (sample copy)
   const stashGoalTarget = 25;
 
-  const quests = SAMPLE_QUESTS;
+  // Chores come from the family store (shared via the invite link). Per-device
+  // kid progress (todo/pending/done) lives in chore-states. Parents get the same
+  // list; the manage affordances live on the family screen.
+  const { family, role } = useFamily();
+  const { states, setChoreState } = useChoreStates();
+
+  const quests = useMemo(
+    () =>
+      (family?.chores ?? []).map((c, i) => ({
+        id: c.id,
+        title: c.name,
+        amount: c.rewardXlm,
+        emoji: c.emoji,
+        tint: QUEST_TINTS[i % QUEST_TINTS.length],
+        status: states[c.id] ?? "todo",
+      })),
+    [family, states],
+  );
   const questsLeft = quests.filter((q) => q.status !== "done").length;
 
   // Private rewards on this device (notes + on-chain claimed status).
@@ -176,32 +179,80 @@ function DashboardPage() {
         <ChevronRight className="size-5 text-muted-foreground" strokeWidth={2.6} />
       </button>
 
-      {/* Today's Quests */}
+      {/* Today's Quests — real chores from the family store */}
       <section className="space-y-3">
         <div className="flex items-center justify-between px-1">
           <h2 className="flex items-center gap-1.5 font-display text-lg font-extrabold">
             <Sparkles className="size-4 text-m-gold" strokeWidth={2.6} />
             Today&apos;s Quests
           </h2>
-          <span className="rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-extrabold text-m-green-ink">
-            {questsLeft} Left
-          </span>
+          {quests.length > 0 && (
+            <span className="rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-extrabold text-m-green-ink">
+              {questsLeft} Left
+            </span>
+          )}
         </div>
 
-        <div className="space-y-2.5">
-          {quests.map((q) => (
-            <QuestCard
-              key={q.id}
-              title={q.title}
-              amount={q.amount}
-              icon={q.icon}
-              emoji={q.emoji}
-              tint={q.tint}
-              status={q.status}
-              onClick={() => navigate({ to: "/streams/$streamId", params: { streamId: q.id } })}
-            />
-          ))}
-        </div>
+        {!family ? (
+          <button
+            type="button"
+            onClick={() => navigate({ to: "/circles" })}
+            className="animate-pop-in flex w-full items-center gap-3 rounded-3xl border border-dashed border-border/70 bg-card/60 p-5 text-left transition-transform active:scale-[0.99]"
+          >
+            <span className="flex size-12 items-center justify-center rounded-2xl bg-m-lilac text-2xl shadow-sm">
+              👨‍👩‍👧‍👦
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="font-display text-[15px] font-extrabold">
+                Set up your family
+              </p>
+              <p className="text-[13px] font-bold text-muted-foreground text-pretty">
+                Add chores and invite your kids to start earning.
+              </p>
+            </div>
+            <ChevronRight className="size-5 text-muted-foreground" strokeWidth={2.6} />
+          </button>
+        ) : quests.length === 0 ? (
+          <div className="rounded-3xl border border-dashed border-border/70 bg-card/60 p-6 text-center">
+            <span className="text-3xl" aria-hidden>
+              🧹
+            </span>
+            <p className="mt-2 font-display text-sm font-extrabold">
+              No chores yet
+            </p>
+            <p className="mt-0.5 text-[13px] font-bold text-muted-foreground text-pretty">
+              {role === "parent"
+                ? "Add chores on your family screen."
+                : "Your grown-up will add some soon!"}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2.5">
+            {quests.map((q) => (
+              <QuestCard
+                key={q.id}
+                title={q.title}
+                amount={q.amount}
+                icon={ListChecks}
+                emoji={q.emoji}
+                tint={q.tint}
+                status={q.status}
+                onClick={() => {
+                  if (role === "parent") {
+                    // Parents manage chores + send rewards from the family screen.
+                    navigate({ to: "/circles" });
+                  } else {
+                    // Kid taps a chore → mark it pending (grown-up then rewards it).
+                    setChoreState(
+                      q.id,
+                      q.status === "pending" ? "todo" : "pending",
+                    );
+                  }
+                }}
+              />
+            ))}
+          </div>
+        )}
       </section>
 
       {/* Live-plumbing footer — proves the Stellar wallet + bindings are wired.
