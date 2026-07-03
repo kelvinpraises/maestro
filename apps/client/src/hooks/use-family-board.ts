@@ -49,6 +49,10 @@ import {
   setKidAddress,
   saveBoardNotices,
   recordDone,
+  recordLocalNote,
+  loadLocalNotes,
+  noteFromClaimLink,
+  importNote,
   randomId,
   FAMILY_EVENT,
   type Family,
@@ -56,10 +60,14 @@ import {
   type ChoreStates,
   type FeedEntry,
 } from "@/lib/family";
+import { deriveNote } from "@/lib/claims";
 
 const POLL_MS = 8_000;
 /** Backoff schedule for a PUT that keeps 409-ing (bounded, then give up). */
 const RETRY_BACKOFFS = [150, 400, 900];
+/** localStorage flag prefix: this device already posted its kid-joined notice
+ *  for a given board+kid (announce once, independent of presence timing). */
+const JOIN_ANNOUNCED_KEY = "maestro.join-announced.v1";
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Server IO — a thin fetch wrapper, all failures swallowed to "offline".
@@ -237,18 +245,83 @@ function mergeIntoLocal(board: Board, family: Family): boolean {
     changed = true;
   }
 
-  // 3) Fill the kid-addresses map from published kids (feeds the allowance picker).
+  // 3) Fill the kid-addresses map from published kids (feeds the allowance
+  //    picker), AND — on the parent device — reconcile the roster: a kid who
+  //    joined via invite self-publishes under view.kids, so any name the parent
+  //    doesn't yet list gets added to family.kidNames. Without this a freshly
+  //    joined kid never appears in the parent's Kids group (the reported
+  //    "kid-joined is broken" bug); the kid-joined NOTICE landed but the roster
+  //    didn't. Parent-authoritative for the roster; the kid device keeps its own
+  //    single-kid membership and skips this.
+  const joinedNames: string[] = [];
   for (const [kidName, kid] of Object.entries(view.kids)) {
     if (kid.address) setKidAddress(kidName, kid.address); // no-ops when unchanged
+    joinedNames.push(kidName);
+  }
+  if (family.role === "parent" && joinedNames.length > 0) {
+    const missing = joinedNames.filter((n) => !family.kidNames.includes(n));
+    if (missing.length > 0) {
+      saveFamily({ ...family, kidNames: [...family.kidNames, ...missing] });
+      emitFamilyChanged();
+      changed = true;
+    }
   }
 
-  // 4) Cache board notices for the family feed (attributable, warm).
+  // 4) AUTO-IMPORT reward-ready notices addressed to THIS kid: drop the claim
+  //    note straight into the rewards store (same dedupe-by-id as /claim-link),
+  //    so the kid's /rewards lights up with no link pasting. Dedupe is twofold:
+  //    importNote is id-based (idempotent), and we only record a family-feed
+  //    entry the FIRST time we act on a given notice id (tracked in local notes).
+  if (family.role === "kid" && family.kidName) {
+    const me = family.kidName.trim();
+    const seenLocalIds = new Set(loadLocalNotes().map((n) => n.id));
+    for (const n of view.notices) {
+      if (n.kind !== "reward-ready" || !n.claim) continue;
+      if (n.kidName && n.kidName !== me) continue; // not for me
+      // Import the note (idempotent on the reward id). We key the family-feed
+      // dedupe on the NOTICE id so repeated polls of the same notice never add a
+      // second row, independent of whether the underlying note already existed.
+      const note = noteFromClaimLink(n.claim, (secret, amountStroops) => {
+        const derived = deriveNote(secret, amountStroops);
+        return "0x" + derived.nullifier.toString(16).padStart(64, "0");
+      });
+      const imported = importNote(note);
+      if (imported) {
+        // A brand-new reward landed on this device → refresh the rewards list.
+        if (typeof window !== "undefined")
+          window.dispatchEvent(new Event("maestro:reward-notes-changed"));
+        changed = true;
+      }
+      // Record the "reward arrived" family-feed row exactly once per notice id.
+      if (!seenLocalIds.has(n.id)) {
+        recordLocalNote({
+          id: n.id,
+          at: n.at,
+          kind: "reward-ready",
+          kidName: n.kidName,
+          text: n.label
+            ? `A reward arrived: ${n.label}`
+            : "A reward arrived for you",
+        });
+        seenLocalIds.add(n.id);
+      }
+    }
+  }
+
+  // 5) Cache board notices for the family feed + the bell inbox (attributable,
+  //    warm). Carry the kind-specific display fields so the feed/bell can render
+  //    amounts and rates without decoding the claim payload.
   const feedRows: FeedEntry[] = view.notices.map((n) => ({
     id: n.id,
     at: n.at,
     kind: n.kind,
     ...(n.kidName ? { kidName: n.kidName } : {}),
     ...(n.text ? { text: n.text } : {}),
+    ...(n.emoji ? { emoji: n.emoji } : {}),
+    ...(typeof n.amountXlm === "number" ? { amountXlm: n.amountXlm } : {}),
+    ...(n.label ? { label: n.label } : {}),
+    ...(typeof n.rateXlm === "number" ? { rateXlm: n.rateXlm } : {}),
+    ...(n.period ? { period: n.period } : {}),
   }));
   saveBoardNotices(feedRows);
 
@@ -282,6 +355,12 @@ export function useFamilyBoard() {
   const versionRef = useRef<number>(0);
   const pendingNoticesRef = useRef<Signed<BoardNotice>[]>([]);
   const syncingRef = useRef(false);
+  // Set when a push is requested while one is already in flight. Without this, a
+  // second push() returns immediately (serialized by syncingRef) and anything it
+  // meant to flush — notably a kid-joined notice queued right after join's own
+  // presence push — is stranded until the next unrelated mutation. On this flag,
+  // push() loops once more when it finishes, coalescing the queued work.
+  const pushAgainRef = useRef(false);
   // Bumped on FAMILY_EVENT so the loop (re)starts the moment a family is created
   // or joined on this device — the effect below re-runs on this tick.
   const [familyTick, setFamilyTick] = useState(0);
@@ -327,7 +406,12 @@ export function useFamilyBoard() {
    * don't stampede the server.
    */
   const push = useCallback(async (): Promise<void> => {
-    if (syncingRef.current) return;
+    // Already syncing → remember that more work wants pushing and let the
+    // in-flight run pick it up when it finishes (see the finally below).
+    if (syncingRef.current) {
+      pushAgainRef.current = true;
+      return;
+    }
     const c = coords();
     if (!c) return;
     syncingRef.current = true;
@@ -377,8 +461,21 @@ export function useFamilyBoard() {
       }
     } finally {
       syncingRef.current = false;
+      // Coalesced re-run: a push arrived mid-flight (its call was serialized
+      // away). Flush it now that we're free. Guarded by an explicit flag (not by
+      // "pending notices remain") so a persistent offline PUT can't busy-loop —
+      // stranded notices are instead retried by the poll interval below.
+      if (pushAgainRef.current) {
+        pushAgainRef.current = false;
+        queueMicrotask(() => void pushRef.current?.());
+      }
     }
   }, [coords, keypair, pull]);
+
+  // Hold the latest push in a ref so the coalesced re-run (inside push's own
+  // finally) can call it without a self-reference at definition time.
+  const pushRef = useRef<typeof push | null>(null);
+  pushRef.current = push;
 
   /** Nudge an immediate sync after a local mutation (pull then push). */
   const pushNow = useCallback(() => {
@@ -420,7 +517,15 @@ export function useFamilyBoard() {
     const onVisible = () => {
       if (document.visibilityState === "visible") void pull();
     };
+    // Flow code (approve, allowance, add-chore, send-a-note) posts a notice by
+    // firing this event with the notice detail — no context/prop-drilling needed,
+    // mirroring requestBoardPush. `author` is stamped inside postNotice.
+    const onPostNotice = (e: Event) => {
+      const detail = (e as CustomEvent<Omit<BoardNotice, "author">>).detail;
+      if (detail) postNotice(detail);
+    };
     window.addEventListener("maestro:board-push", onLocalMutation);
+    window.addEventListener("maestro:board-post-notice", onPostNotice);
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onVisible);
 
@@ -439,27 +544,43 @@ export function useFamilyBoard() {
         if (!board && c.family.role === "parent") {
           await push();
         }
-        // A kid whose address isn't on the board yet publishes it + a join notice.
+        // A kid announces its join ONCE per device+family — a "kid-joined"
+        // notice (for the parent's bell + feed) plus its presence section (the
+        // postNotice push publishes both). This is gated on a local
+        // already-announced flag, NOT on whether the presence is already on the
+        // board: the presence can land first (join's own requestBoardPush), which
+        // would otherwise make the announce think it was already done and strand
+        // the notice — the reported "kid-joined doesn't reach the parent" bug.
         if (!cancelled && c.family.role === "kid" && c.family.kidName) {
-          const mine = lastBoardRef.current?.kids?.[c.family.kidName];
-          const published = mine
-            ? verifySection(mine, mine.signer)?.address === keypair.publicKey()
-            : false;
-          if (!published) {
+          const flag = `${JOIN_ANNOUNCED_KEY}:${c.boardId}:${c.family.kidName}`;
+          let announced = false;
+          try {
+            announced = localStorage.getItem(flag) === "1";
+          } catch {
+            /* private mode — fall back to announcing */
+          }
+          if (!announced) {
+            try {
+              localStorage.setItem(flag, "1");
+            } catch {
+              /* ignore */
+            }
             postNotice({
               id: `join-${c.family.kidName}-${randomId()}`,
               at: Date.now(),
               kind: "kid-joined",
               kidName: c.family.kidName,
             });
-            // postNotice's push also publishes the kid's presence section.
           }
         }
       })();
 
       interval = setInterval(() => {
         if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
-        void pull();
+        // Flush any stranded pending notices (push pulls first); otherwise just
+        // pull. A push whose turn was serialized away lands on the next tick.
+        if (pendingNoticesRef.current.length > 0) void push();
+        else void pull();
       }, POLL_MS);
     }
 
@@ -467,6 +588,7 @@ export function useFamilyBoard() {
       cancelled = true;
       if (interval) clearInterval(interval);
       window.removeEventListener("maestro:board-push", onLocalMutation);
+      window.removeEventListener("maestro:board-post-notice", onPostNotice);
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVisible);
     };
@@ -481,5 +603,20 @@ export function useFamilyBoard() {
 export function requestBoardPush(): void {
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event("maestro:board-push"));
+  }
+}
+
+/**
+ * Fire-and-forget: ask the mounted board hook to sign + post a notice from this
+ * device and push it. `author` is stamped inside the hook (this device's key), so
+ * callers pass everything BUT the author. Used by task #4's flows (reward-ready,
+ * allowance-started, message) — the same pattern as requestBoardPush, so flow
+ * code needs no context or prop-drilling.
+ */
+export function requestPostNotice(notice: Omit<BoardNotice, "author">): void {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent("maestro:board-post-notice", { detail: notice }),
+    );
   }
 }

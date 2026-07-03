@@ -18,8 +18,10 @@ import { useFamily } from "@/hooks/use-family";
 import {
   getKidAddress,
   setKidAddress,
+  randomId,
   KID_ADDRESSES_EVENT,
 } from "@/lib/family";
+import { requestPostNotice } from "@/hooks/use-family-board";
 import {
   useAllowanceState,
   useCreateAllowance,
@@ -347,7 +349,27 @@ function AllowancePage() {
             if (recipient.kind === "kid" && !knownKidAddress) {
               setKidAddress(recipient.name, resolvedAddress);
             }
-            create.mutate({ rate, period, fundXlm, recipient: resolvedAddress });
+            create.mutate(
+              { rate, period, fundXlm, recipient: resolvedAddress },
+              {
+                onSuccess: () => {
+                  // When the drip is aimed at a named kid, post an
+                  // allowance-started notice so their phone shows "Your allowance
+                  // is flowing". Myself/raw-address allowances post nothing (no
+                  // kid to notify).
+                  if (recipient.kind === "kid") {
+                    requestPostNotice({
+                      id: `allowance-${recipient.name}-${randomId()}`,
+                      at: Date.now(),
+                      kind: "allowance-started",
+                      kidName: recipient.name,
+                      rateXlm: rate,
+                      period,
+                    });
+                  }
+                },
+              },
+            );
           }}
           className="press-pop flex h-13 w-full items-center justify-center gap-2 rounded-full border-2 border-m-ink bg-m-blue py-3.5 font-display text-base font-extrabold text-white shadow-[var(--m-pop)] hover:brightness-105 disabled:opacity-50"
         >

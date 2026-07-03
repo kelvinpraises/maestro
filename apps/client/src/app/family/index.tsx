@@ -24,6 +24,7 @@ import {
   LinkIcon,
   SparkleIcon,
   UserPlusIcon,
+  HandWavingIcon,
   BroomIcon,
   LockIcon,
   ListChecksIcon,
@@ -50,10 +51,14 @@ import { formatRelativeTime } from "@/utils";
 import {
   buildInviteLink,
   buildClaimLink,
+  randomId,
+  PARENT_SENDER_NAME,
   type Chore,
   type ChoreRepeat,
   type FeedEntry,
 } from "@/lib/family";
+import { requestPostNotice } from "@/hooks/use-family-board";
+import { SendNoteDialog } from "@/components/molecules/send-note-dialog";
 
 // The three parent groups. `?g=kids` deep-links straight to the Kids group so
 // the home screen's kid chips can land here (dead-affordance fix, item 4).
@@ -222,7 +227,12 @@ function ParentView({
         {group === "kids" && (
           <KidsSection family={family} addKidName={addKidName} />
         )}
-        {group === "activity" && <FamilyFeedSection />}
+        {group === "activity" && (
+          <FamilyFeedSection
+            noteSenderName={PARENT_SENDER_NAME}
+            noteRecipientHint="to your kids"
+          />
+        )}
       </div>
     </div>
   );
@@ -479,6 +489,17 @@ function ChoresSection({
       ...(assignee ? { assignee } : {}),
       ...(repeat !== "daily" ? { repeat } : {}),
     });
+    // Tell the kid device(s): a new chore landed. Assignee (when set) scopes the
+    // bell so an "anyone" chore reaches everyone and an assigned one only that
+    // kid. The chore list itself already syncs via the board; this is the ping.
+    requestPostNotice({
+      id: `chore-${randomId()}`,
+      at: Date.now(),
+      kind: "chore-added",
+      text: name.trim(),
+      emoji,
+      ...(assignee ? { kidName: assignee } : {}),
+    });
     reset();
     setOpen(false);
     toast.success("Chore added");
@@ -656,7 +677,7 @@ function KidsSection({
                 {k}
               </p>
             </div>
-            <div className="mt-2.5 flex gap-2">
+            <div className="mt-2.5 flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={() => {
@@ -974,8 +995,15 @@ function KidView({
         </div>
       </section>
 
-      {/* What our family's been up to — the warm, attributable family feed. */}
-      <FamilyFeedSection heading="What we've been up to" />
+      {/* What our family's been up to — the warm, attributable family feed. The
+          "+" beside the heading is the kid's send-a-note affordance (no longer a
+          standalone card): the doer's voice, right where the family story lives. */}
+      <FamilyFeedSection
+        heading="What we've been up to"
+        {...(family.kidName
+          ? { noteSenderName: family.kidName, noteRecipientHint: "to your family" }
+          : {})}
+      />
     </>
   );
 }
@@ -999,6 +1027,10 @@ function feedRowCopy(e: FeedEntry): { title: string; icon: typeof GiftIcon; tint
       return { title: `A reward is ready${e.kidName ? ` for ${e.kidName}` : ""} 🎁`, icon: GiftIcon, tint: "green" };
     case "allowance-started":
       return { title: `Allowance started${e.kidName ? ` for ${e.kidName}` : ""} 💧`, icon: SparkleIcon, tint: "gold" };
+    case "chore-added":
+      return { title: `New chore: ${e.emoji ? `${e.emoji} ` : ""}${e.text ?? "a chore"}`, icon: SparkleIcon, tint: "purple" };
+    case "chore-pending":
+      return { title: `${e.kidName ?? "A kid"} says ${e.text ? `"${e.text}"` : "a chore"} is done ✋`, icon: HandWavingIcon, tint: "gold" };
     case "message":
       return { title: e.text || "A note", icon: SparkleIcon, tint: "lilac" };
     default:
@@ -1008,8 +1040,13 @@ function feedRowCopy(e: FeedEntry): { title: string; icon: typeof GiftIcon; tint
 
 function FamilyFeedSection({
   heading = "Family activity",
+  noteSenderName,
+  noteRecipientHint,
 }: {
   heading?: string;
+  /** When set, a small round "+" beside the heading opens the send-note dialog. */
+  noteSenderName?: string;
+  noteRecipientHint?: string;
 }) {
   const feed = useFamilyFeed();
   const [showAll, setShowAll] = useState(false);
@@ -1019,10 +1056,19 @@ function FamilyFeedSection({
 
   return (
     <section className="space-y-3">
-      <h2 className="flex items-center gap-1.5 px-1 font-display text-lg font-extrabold">
-        <SparkleIcon className="size-4 text-m-gold" weight="fill" />
-        {heading}
-      </h2>
+      <div className="flex items-center justify-between gap-2 px-1">
+        <h2 className="flex items-center gap-1.5 font-display text-lg font-extrabold">
+          <SparkleIcon className="size-4 text-m-gold" weight="fill" />
+          {heading}
+        </h2>
+        {noteSenderName && noteRecipientHint && (
+          <SendNoteDialog
+            senderName={noteSenderName}
+            recipientHint={noteRecipientHint}
+            iconOnly
+          />
+        )}
+      </div>
 
       {feed.length === 0 ? (
         <div className="card-pop bg-card/70 p-8 text-center">

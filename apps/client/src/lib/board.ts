@@ -32,6 +32,7 @@ import type {
   Chore,
   ChoreStates,
   ChoreStateEntry,
+  ClaimLinkPayload,
 } from "@/lib/family";
 import { encodeBlob, decodeBlob } from "@/lib/family";
 
@@ -75,18 +76,54 @@ export interface BoardKid {
   joinedAt: number;
 }
 
-/** A board notice — groundwork for task #4. One kind is wired now: kid-joined. */
+/**
+ * A board notice. The kinds:
+ *   • kid-joined        — {kidName}
+ *   • reward-ready      — {kidName=forKid, amountXlm, label?, choreId?, claim} —
+ *                         the claim payload rides the (already-encrypted) board so
+ *                         the kid device can AUTO-IMPORT the reward with no link.
+ *   • allowance-started — {kidName=forKid, rateXlm, period}
+ *   • chore-added       — {text=name, emoji?, kidName?=assignee}
+ *   • chore-pending     — {kidName=doer, text=chore name, choreId} — a kid marked
+ *                         a chore done; addressed to the parent (bell + feed), so
+ *                         the nod is news, not only a card the parent must notice.
+ *   • message           — {text, from(=author's role/name via kidName?)}
+ * The base fields are common; the kind-specific ones are optional so an older or
+ * unrelated notice still decodes. `claim` is the ONLY place a secret rides the
+ * board; the board blob is AES-GCM encrypted (family key), which is the transport
+ * security here (FAMILY-BOARD.md's stated trade-off).
+ */
 export interface BoardNotice {
   /** Stable id (dedupes appends across devices). */
   id: string;
   /** Unix ms. */
   at: number;
-  /** Notice kind. Only "kid-joined" is surfaced today; others are forward-compat. */
-  kind: "kid-joined" | "reward-ready" | "allowance-started" | "message";
-  /** Who it concerns / who authored it (kid name where relevant). */
+  /** Notice kind. */
+  kind:
+    | "kid-joined"
+    | "reward-ready"
+    | "allowance-started"
+    | "chore-added"
+    | "chore-pending"
+    | "message";
+  /** Who it concerns / who authored it (kid name where relevant, or a message's sender). */
   kidName?: string;
-  /** Free-form human text (message notices). */
+  /** Free-form human text (message notices, a chore-added/chore-pending chore name). */
   text?: string;
+  /** A single emoji (chore-added). */
+  emoji?: string;
+  /** Reward size in XLM (reward-ready) — for warm display without decoding `claim`. */
+  amountXlm?: number;
+  /** Human label for the reward (reward-ready). */
+  label?: string;
+  /** The chore this concerns (reward-ready, chore-pending) — dedupes the feed row. */
+  choreId?: string;
+  /** The claim-link payload (reward-ready). The kid device auto-imports this. */
+  claim?: ClaimLinkPayload;
+  /** Allowance rate in XLM per period (allowance-started). */
+  rateXlm?: number;
+  /** Allowance period ("day" | "week") (allowance-started). */
+  period?: string;
   /** Author's Stellar address (must be the parent or a known kid). */
   author: string;
 }

@@ -36,6 +36,7 @@ import { toast } from "sonner";
 import { EarningsHero } from "@/components/organisms/earnings-hero";
 import { QuestCard, type QuestTint } from "@/components/molecules/quest-card";
 import { ChoreCard } from "@/components/molecules/chore-card";
+import { NoticesBell } from "@/components/molecules/notices-bell";
 import { IconTile, EmojiTile } from "@/components/atoms/icon-tile";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/atoms/avatar";
 import { Button } from "@/components/atoms/button";
@@ -55,7 +56,10 @@ import {
   recordLocalNote,
   type Chore,
   type ChoreState,
+  type FamilyRole,
+  type ClaimLinkPayload,
 } from "@/lib/family";
+import { requestPostNotice } from "@/hooks/use-family-board";
 import { useAllowanceDrip } from "@/hooks/use-allowance-drip";
 import { useCollectAllowance, type CollectStep } from "@/hooks/use-allowance";
 import { useCountUp } from "@/hooks/use-count-up";
@@ -108,17 +112,22 @@ function HomeHeader({
   fallbackTint,
   title,
   subtitle,
+  role,
+  kidName,
 }: {
   avatarSeed: string;
   fallback: string;
   fallbackTint: string;
   title: React.ReactNode;
   subtitle: string;
+  /** Scopes the bell's inbox to this device's relevant notices. */
+  role: FamilyRole | null;
+  kidName?: string;
 }) {
-  // No bell: a bell promises notifications none exist; it returns later as the
-  // board inbox (audit issue 8). Until then the header is just the greeting.
+  // The bell is back, real this time: it opens the board notices inbox with an
+  // unseen-count badge (audit survivor 8). No badge when there's nothing new.
   return (
-    <header className="flex items-center justify-between">
+    <header className="flex items-center justify-between gap-3">
       <div className="flex min-w-0 items-center gap-3">
         <Avatar className="size-12 shrink-0 rounded-2xl border-2 border-m-ink shadow-[var(--m-pop-sm)]">
           <AvatarImage
@@ -140,6 +149,7 @@ function HomeHeader({
           </p>
         </div>
       </div>
+      <NoticesBell role={role} kidName={kidName} />
     </header>
   );
 }
@@ -236,6 +246,8 @@ function KidHome({ chores }: { chores: ChoreRow[] }) {
         fallbackTint="bg-m-sky text-m-blue"
         title={`Hey ${kidName}!`}
         subtitle="Ready to earn?"
+        role="kid"
+        kidName={myName}
       />
 
       {/* Earnings hero — only when there's money to celebrate this week. */}
@@ -375,7 +387,23 @@ function KidHome({ chores }: { chores: ChoreRow[] }) {
         open={!!cardChore && cardStatus !== "done"}
         onOpenChange={(o) => !o && setCardChore(null)}
         onConfirm={() => {
-          if (cardChore) setChoreState(cardChore.id, myName, "pending");
+          if (cardChore) {
+            setChoreState(cardChore.id, myName, "pending");
+            // Tell the parent: "{kid} says it's done." The pending STATE already
+            // syncs to the parent's nod queue (setChoreState pushes the board);
+            // this posts a chore-pending NOTICE too, so the nod also lands in the
+            // parent's bell + feed — the ask is news, not only a card to notice.
+            // id keyed on (chore, kid, tap) so each distinct mark is one notice
+            // and repeated board polls never duplicate it.
+            requestPostNotice({
+              id: `pending-${cardChore.id}-${myName}-${Date.now()}`,
+              at: Date.now(),
+              kind: "chore-pending",
+              kidName: myName,
+              text: cardChore.name,
+              choreId: cardChore.id,
+            });
+          }
           setCardChore(null);
         }}
       />
@@ -648,12 +676,15 @@ function NodCard({
   chore,
   kidName,
   kidLivesHere,
+  boardSynced,
   onDismiss,
   onPaid,
 }: {
   chore: ChoreRow;
   kidName: string;
   kidLivesHere: boolean;
+  /** True when this family syncs a board — the kid device auto-imports the reward. */
+  boardSynced: boolean;
   onDismiss: () => void;
   onPaid: () => void;
 }) {
@@ -670,6 +701,27 @@ function NodCard({
         onSuccess: ({ note }) => {
           setClaimLink(buildClaimLink(note));
           setStage("funded");
+          // Post a reward-ready notice carrying the claim payload. On a
+          // board-synced family the kid device auto-imports it into /rewards
+          // (no link pasting); the claim rides the AES-GCM-encrypted board, which
+          // is the transport security here. The manual copy-link stays for
+          // pre-board families and as a fallback.
+          const claim: ClaimLinkPayload = {
+            secret: note.secret,
+            amountStroops: note.amountStroops,
+            leafIndex: note.leafIndex,
+            ...(note.label ? { label: note.label } : {}),
+          };
+          requestPostNotice({
+            id: `reward-${chore.id}-${kidName}-${note.id.slice(0, 10)}`,
+            at: Date.now(),
+            kind: "reward-ready",
+            kidName,
+            amountXlm: chore.rewardXlm,
+            label: chore.name,
+            choreId: chore.id,
+            claim,
+          });
           // The chore is paid → celebrate it on the kid's home (done row).
           onPaid();
         },
@@ -719,21 +771,33 @@ function NodCard({
             </p>
           </div>
         </div>
+        {/* When the family is board-synced, the reward already flew to the kid's
+            phone (auto-import); the link becomes an also-can, not the main path. */}
+        {boardSynced && (
+          <p className="mt-2.5 text-[13px] font-bold text-m-green-ink text-pretty">
+            Sent to {kidLabel}&apos;s phone. You can also copy a link.
+          </p>
+        )}
         <div className="mt-3 flex flex-col gap-2">
           <Button size="sm" className="w-full" onClick={copyLink}>
             <CopyIcon className="mr-1.5 size-4" weight="bold" />
             Copy claim link
           </Button>
           {kidLivesHere && (
-            <button
-              type="button"
-              onClick={addToStash}
-              disabled={added}
-              className="press-pop flex w-full items-center justify-center gap-1.5 rounded-full border-2 border-m-ink/25 bg-white/60 px-3.5 py-2.5 font-display text-[13px] font-extrabold text-foreground disabled:opacity-60"
-            >
-              <DownloadSimpleIcon className="size-4" weight="bold" />
-              {added ? "In this device's stash" : "Add to this device's stash"}
-            </button>
+            <div className="flex flex-col gap-1">
+              <button
+                type="button"
+                onClick={addToStash}
+                disabled={added}
+                className="press-pop flex w-full items-center justify-center gap-1.5 rounded-full border-2 border-m-ink/25 bg-white/60 px-3.5 py-2.5 font-display text-[13px] font-extrabold text-foreground disabled:opacity-60"
+              >
+                <DownloadSimpleIcon className="size-4" weight="bold" />
+                {added ? "In this device's stash" : "Add to this device's stash"}
+              </button>
+              <p className="px-1 text-center text-[11px] font-bold text-muted-foreground text-pretty">
+                {kidName ? `Reward sent to ${kidName}.` : "Reward sent."}
+              </p>
+            </div>
           )}
           <button
             type="button"
@@ -841,6 +905,9 @@ function ParentHome({ chores }: { chores: ChoreRow[] }) {
     return out;
   }, [chores, statesFor, justFunded]);
   const hasKids = (family?.kidNames.length ?? 0) > 0;
+  // Board-synced when this family carries both board coordinates — the reward
+  // auto-imports on the kid device, so the funded card says "Sent to their phone".
+  const boardSynced = !!(family?.boardId && family?.familyKey);
 
   // Same-device demo reality (DESIGN-STORY §5, step 5): in the demo, the parent
   // and kid share one browser's localStorage — so after funding we can offer to
@@ -859,6 +926,7 @@ function ParentHome({ chores }: { chores: ChoreRow[] }) {
         fallbackTint="bg-m-lilac text-m-purple"
         title={familyName}
         subtitle="Here's how the team is doing."
+        role="parent"
       />
 
       {/* Needs your nod — approvals FIRST when non-empty. One card per (chore,
@@ -881,6 +949,7 @@ function ParentHome({ chores }: { chores: ChoreRow[] }) {
                 chore={c}
                 kidName={kid}
                 kidLivesHere={kidLivesHere}
+                boardSynced={boardSynced}
                 onDismiss={() => {
                   // Dismiss a not-yet-funded card = clear THAT kid's entry (→ todo).
                   // Dismiss ("Done") after funding = just drop it from the queue.

@@ -13,6 +13,7 @@ import { IconTile } from "@/components/atoms/icon-tile";
 import { ConfettiBurst } from "@/components/atoms/confetti-burst";
 import { useStellarWallet } from "@/providers/stellar-wallet-provider";
 import { useCountUp } from "@/hooks/use-count-up";
+import { useFamily } from "@/hooks/use-family";
 import { cn } from "@/utils";
 import {
   useFundReward,
@@ -40,6 +41,11 @@ const CLAIM_STEP_LABEL: Record<ClaimStep, string> = {
 function RewardsPage() {
   const [amount, setAmount] = useState(1);
   const [label, setLabel] = useState("");
+
+  // "Fund a reward" is a PARENT action (DESIGN-STORY §5: parent "send", kid
+  // "claim"). The kid sees only the claimable side — never funding language.
+  const { role } = useFamily();
+  const isParent = role === "parent";
 
   const fund = useFundReward();
   const rewards = useMyRewards();
@@ -93,8 +99,9 @@ function RewardsPage() {
       <header>
         <h1 className="font-display text-3xl font-extrabold tracking-tight">Rewards</h1>
         <p className="mt-1 text-[15px] font-bold text-muted-foreground text-pretty">
-          Parents tuck a reward into the family treasury. Kids claim it
-          privately, so nobody can tell who earned what.
+          {isParent
+            ? "Tuck a reward into the family treasury. Your kid claims it privately, so nobody can tell who earned what."
+            : "Rewards your family sent you. Claim each one privately, so nobody can tell what you earned."}
         </p>
       </header>
 
@@ -118,7 +125,8 @@ function RewardsPage() {
         </div>
       )}
 
-      {/* ── Fund a reward (parent) ─────────────────────────────────────────── */}
+      {/* ── Fund a reward (PARENT ONLY) ────────────────────────────────────── */}
+      {isParent && (
       <section className="space-y-3 card-pop p-4">
         <h2 className="flex items-center gap-1.5 font-display text-lg font-extrabold">
           <GiftIcon className="size-4 text-m-purple" weight="duotone" />
@@ -196,6 +204,7 @@ function RewardsPage() {
           </p>
         )}
       </section>
+      )}
 
       {/* ── Claimable rewards (kid) ────────────────────────────────────────── */}
       <section className="space-y-3">
@@ -214,7 +223,7 @@ function RewardsPage() {
         {rewards.isLoading && rewardList.length === 0 ? (
           <SkeletonCard />
         ) : claimable.length === 0 ? (
-          <EmptyState />
+          <EmptyState isParent={isParent} />
         ) : (
           <div className="space-y-2.5">
             {claimable.map((r) => (
@@ -341,13 +350,17 @@ function ClaimableCard({
   );
 }
 
-function EmptyState() {
+function EmptyState({ isParent }: { isParent: boolean }) {
   return (
     <div className="card-pop bg-card/70 p-6 text-center">
       <IconTile icon={GiftIcon} tint="lilac" size="lg" className="mx-auto" />
-      <p className="mt-2 font-display text-sm font-extrabold">No rewards yet</p>
+      <p className="mt-2 font-display text-sm font-extrabold">
+        {isParent ? "No rewards yet" : "Nothing to claim yet"}
+      </p>
       <p className="mt-0.5 text-[13px] font-bold text-muted-foreground text-pretty">
-        Fund a reward above and it shows up here, ready for a private claim.
+        {isParent
+          ? "Fund a reward above and it shows up here, ready for a private claim."
+          : "When your family sends you a reward, it lands here to claim."}
       </p>
     </div>
   );

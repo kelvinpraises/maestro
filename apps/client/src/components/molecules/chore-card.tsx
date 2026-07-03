@@ -110,7 +110,7 @@ export function ChoreCard({
               Waiting for {waitingFor}
             </p>
             <p className="mt-0.5 text-[12px] font-bold text-m-blue/70">
-              Nice work — sit tight!
+              Nice work, sit tight!
             </p>
           </div>
         ) : (

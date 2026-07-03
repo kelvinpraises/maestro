@@ -906,9 +906,26 @@ const LOCAL_NOTES_CAP = 100;
 export interface FeedEntry {
   id: string;
   at: number;
-  kind: "kid-joined" | "reward-ready" | "allowance-started" | "message" | "note";
+  kind:
+    | "kid-joined"
+    | "reward-ready"
+    | "allowance-started"
+    | "chore-added"
+    | "chore-pending"
+    | "message"
+    | "note";
   kidName?: string;
   text?: string;
+  /** A single emoji (chore-added). */
+  emoji?: string;
+  /** Reward size in XLM (reward-ready) — warm display in feed + bell. */
+  amountXlm?: number;
+  /** Reward label (reward-ready). */
+  label?: string;
+  /** Allowance rate in XLM (allowance-started). */
+  rateXlm?: number;
+  /** Allowance period, "day" | "week" (allowance-started). */
+  period?: string;
 }
 
 /** Replace the cached board notices (called by the sync hook after each merge). */
@@ -974,6 +991,92 @@ export function loadFamilyFeed(): FeedEntry[] {
   }
   out.sort((a, b) => b.at - a.at);
   return out;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Notices inbox (the bell). The feed above is the "our family" story; the bell
+//  is THIS device's actionable inbox, filtered by role and ordered newest-first,
+//  with an unseen-count badge driven by a locally-stored last-seen timestamp.
+//    • kid    sees: reward-ready for me, chore-added (mine or anyone's),
+//                   allowance-started for me, messages.
+//    • parent sees: kid-joined, chore-pending (a kid marked a chore done),
+//                   messages.
+//  Unseen = notices with `at` strictly greater than the last-seen timestamp.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const NOTICES_SEEN_STORAGE_KEY = "maestro.notices-seen.v1";
+export const NOTICES_SEEN_EVENT = "maestro:notices-seen-changed";
+
+/**
+ * The sender label stamped on a parent's "message" notice (the parent has no
+ * per-kid name). Kids see it as the sender ("from a grown-up"); the parent's own
+ * bell hides it (a message is never news to whoever sent it).
+ */
+export const PARENT_SENDER_NAME = "a grown-up";
+
+/** The last time this device opened the bell (unix ms). 0 when never opened. */
+export function loadNoticesSeenAt(): number {
+  try {
+    const raw = localStorage.getItem(NOTICES_SEEN_STORAGE_KEY);
+    if (!raw) return 0;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** Mark the bell as seen up to `at` (default now). Emits a same-tab change event. */
+export function markNoticesSeen(at: number = Date.now()): void {
+  try {
+    localStorage.setItem(NOTICES_SEEN_STORAGE_KEY, String(at));
+    if (typeof window !== "undefined")
+      window.dispatchEvent(new Event(NOTICES_SEEN_EVENT));
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * The bell's notices for this device's role, newest-first. Reads the SAME cached
+ * board notices the feed reads (board-synced, signed) — local device notes are
+ * the feed's job, not the inbox's. `role`/`kidName` scope which notices are
+ * relevant.
+ */
+export function loadInboxNotices(
+  role: FamilyRole | null,
+  kidName?: string,
+): FeedEntry[] {
+  const me = kidName?.trim();
+  const rows = loadBoardNotices().filter((e) => {
+    switch (e.kind) {
+      case "reward-ready":
+      case "allowance-started":
+        // Kid: only notices addressed to me. Parent: none (these are the kid's).
+        return role === "kid" && (!e.kidName || e.kidName === me);
+      case "chore-added":
+        // Kid: a new chore for me or for anyone (kidName holds the assignee).
+        return role === "kid" && (!e.kidName || e.kidName === me);
+      case "kid-joined":
+        // Parent: a kid joined the team. Kid: not their concern.
+        return role === "parent";
+      case "chore-pending":
+        // Parent: a kid marked a chore done ("I did it!") — the nod is news.
+        // Kid: not their concern (it's their own action).
+        return role === "parent";
+      case "message": {
+        // Messages: show to everyone but the sender. `kidName` holds the sender
+        // (a kid's name, or PARENT_SENDER_NAME for a parent's note). Hide a kid's
+        // own note (kidName === me); hide a parent's own note (parent-authored).
+        if (role === "parent") return e.kidName !== PARENT_SENDER_NAME;
+        return e.kidName !== me;
+      }
+      default:
+        return false;
+    }
+  });
+  rows.sort((a, b) => b.at - a.at);
+  return rows;
 }
 
 /**

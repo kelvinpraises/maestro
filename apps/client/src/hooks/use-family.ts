@@ -29,10 +29,15 @@ import {
   GOAL_EVENT,
   SCOOP_LOG_EVENT,
   FEED_EVENT,
+  NOTICES_SEEN_EVENT,
   loadFamilyFeed,
+  loadInboxNotices,
+  loadNoticesSeenAt,
+  markNoticesSeen,
   randomId,
   randomCapability,
   type Family,
+  type FamilyRole,
   type FeedEntry,
   type Chore,
   type ChoreState,
@@ -375,4 +380,51 @@ export function useFamilyFeed(): FeedEntry[] {
     };
   }, []);
   return feed;
+}
+
+// ── useNoticesInbox — the bell: this device's relevant notices + unseen count ──
+//
+// The bell (audit survivor) returns as the notices inbox. This hook reads the
+// role-scoped board notices (newest-first) and derives an unseen count from the
+// locally-stored last-seen timestamp. `markSeen()` clears the badge (called when
+// the sheet opens); it persists, so the badge stays cleared across reloads.
+// Reloads on FEED_EVENT (a merge cached new notices) and the seen-changed event.
+
+export function useNoticesInbox(role: FamilyRole | null, kidName?: string) {
+  const name = kidName?.trim();
+  const compute = useCallback(
+    () => (typeof window === "undefined" ? [] : loadInboxNotices(role, name)),
+    [role, name],
+  );
+  const [notices, setNotices] = useState<FeedEntry[]>(compute);
+  const [seenAt, setSeenAt] = useState<number>(() =>
+    typeof window === "undefined" ? 0 : loadNoticesSeenAt(),
+  );
+
+  useEffect(() => {
+    const reloadNotices = () => setNotices(compute());
+    const reloadSeen = () => setSeenAt(loadNoticesSeenAt());
+    reloadNotices(); // role/kidName may have changed
+    window.addEventListener(FEED_EVENT, reloadNotices);
+    window.addEventListener(NOTICES_SEEN_EVENT, reloadSeen);
+    window.addEventListener("storage", () => {
+      reloadNotices();
+      reloadSeen();
+    });
+    return () => {
+      window.removeEventListener(FEED_EVENT, reloadNotices);
+      window.removeEventListener(NOTICES_SEEN_EVENT, reloadSeen);
+    };
+  }, [compute]);
+
+  const unseenCount = notices.filter((n) => n.at > seenAt).length;
+  const markSeen = useCallback(() => {
+    // Seal to the newest notice's timestamp (or now) so future notices still
+    // badge, but everything currently shown reads as seen.
+    const newest = notices.reduce((m, n) => Math.max(m, n.at), Date.now());
+    markNoticesSeen(newest);
+    setSeenAt(newest);
+  }, [notices]);
+
+  return { notices, unseenCount, markSeen };
 }
