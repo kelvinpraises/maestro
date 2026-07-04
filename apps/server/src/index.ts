@@ -1,32 +1,33 @@
 // The Family Board relay — reborn tiny (see context/FAMILY-BOARD.md).
 //
 // One job: hold a single opaque, versioned blob per family and hand it back.
-// No accounts, no auth, no database — the `familyId` IS the capability (a random
-// 128-bit value the parent minted), and the `blob` is AES-GCM ciphertext the
-// client encrypted with the family key. The server can't read a byte of it, which
-// is the whole point: the infrastructure never learns your family's business,
-// exactly like the zk-rewards story on the money side.
+// No accounts, no auth — the `familyId` IS the capability (a random 128-bit value
+// the parent minted), and the `blob` is AES-GCM ciphertext the client encrypted
+// with the family key. The server can't read a byte of it, which is the whole
+// point: the infrastructure never learns your family's business, exactly like the
+// zk-rewards story on the money side.
 //
 //   GET  /board/:familyId  -> { version, blob }  (404 if we've never seen it)
 //   PUT  /board/:familyId   { version, blob }     accepted only if version is
 //                            exactly current+1, else 409 with the current record
 //                            so the caller can re-pull, re-merge, and retry.
 //
-// State is an in-memory Map, snapshotted to a JSON file so a restart doesn't lose
-// a family's board. Deliberately dependency-free (Node's built-in http) so it
-// runs with `tsx`/`node` straight out of the repo's existing tooling.
+// Storage is SQLite via libSQL, so the SAME code runs on a plain file locally and
+// on Turso when deployed serverless (Vercel). The HTTP layer stays dependency-free
+// (Node's built-in http); the one dependency is the libSQL client in
+// `infrastructure/database`.
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import {
+  migrate,
+  getBoard,
+  putBoard,
+  countBoards,
+} from "./infrastructure/database/boards.ts";
 
 // ── config ───────────────────────────────────────────────────────────────────
 
 const PORT = Number(process.env.PORT ?? 8787);
-// Where the snapshot lives (survives restarts). Kept next to the source by default.
-const SNAPSHOT_PATH = resolve(
-  process.env.BOARD_SNAPSHOT ?? new URL("../data/boards.json", import.meta.url).pathname,
-);
 // A blob is a small encrypted JSON board — cap it so nobody parks a payload here.
 const MAX_BLOB_BYTES = 256 * 1024; // ~256KB
 // Whole-body cap (blob + a little JSON envelope). Reject early, before parsing.
@@ -37,42 +38,6 @@ const ALLOWED_ORIGINS = new Set([
   "http://127.0.0.1:5173",
   "http://localhost:4173", // vite preview
 ]);
-
-// ── the store ────────────────────────────────────────────────────────────────
-
-interface BoardRecord {
-  version: number;
-  blob: string; // base64url AES-GCM ciphertext, opaque to us
-}
-
-const boards = new Map<string, BoardRecord>();
-
-// Load the snapshot on boot (best-effort; a missing/corrupt file just starts empty).
-function loadSnapshot(): void {
-  try {
-    const raw = readFileSync(SNAPSHOT_PATH, "utf-8");
-    const parsed = JSON.parse(raw) as Record<string, BoardRecord>;
-    for (const [id, rec] of Object.entries(parsed)) {
-      if (rec && typeof rec.version === "number" && typeof rec.blob === "string") {
-        boards.set(id, rec);
-      }
-    }
-    console.log(`[board] loaded ${boards.size} family board(s) from snapshot`);
-  } catch {
-    console.log("[board] no snapshot yet — starting empty");
-  }
-}
-
-// Persist the whole Map to disk. Cheap at this scale (a handful of families) and
-// simplest-correct: write the entire snapshot after every accepted PUT.
-function saveSnapshot(): void {
-  try {
-    mkdirSync(dirname(SNAPSHOT_PATH), { recursive: true });
-    writeFileSync(SNAPSHOT_PATH, JSON.stringify(Object.fromEntries(boards)), "utf-8");
-  } catch (err) {
-    console.warn("[board] snapshot write failed (non-fatal)", err);
-  }
-}
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -140,7 +105,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 
   // A tiny liveness probe, handy for the demo dry-run.
   if (url.pathname === "/health") {
-    sendJson(res, 200, { ok: true, families: boards.size });
+    sendJson(res, 200, { ok: true, families: await countBoards() });
     return;
   }
 
@@ -157,7 +122,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 
   // ── GET: hand back the current record, or 404 if we've never seen it ─────────
   if (req.method === "GET") {
-    const rec = boards.get(familyId);
+    const rec = await getBoard(familyId);
     if (!rec) {
       sendJson(res, 404, { error: "no_board" });
       return;
@@ -204,22 +169,17 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       return;
     }
 
-    const current = boards.get(familyId);
-    const expected = (current?.version ?? 0) + 1;
-    if (version !== expected) {
+    const result = await putBoard(familyId, version, blob);
+    if (!result.ok) {
       // Optimistic-concurrency clash: tell the caller the truth so it can
       // re-pull, re-merge, and retry with the right next version.
       sendJson(res, 409, {
         error: "version_conflict",
-        current: current ?? null,
+        current: result.current,
       });
       return;
     }
-
-    const rec: BoardRecord = { version, blob };
-    boards.set(familyId, rec);
-    saveSnapshot();
-    sendJson(res, 200, rec);
+    sendJson(res, 200, result.record);
     return;
   }
 
@@ -228,7 +188,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 
 // ── boot ──────────────────────────────────────────────────────────────────────
 
-loadSnapshot();
+await migrate();
 createServer((req, res) => {
   handle(req, res).catch((err) => {
     console.error("[board] unhandled error", err);
