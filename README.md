@@ -87,3 +87,7 @@ npm run dev
 - **Drips** for the allowance streaming model.
 - **ERC-8065 and ZWToken** for the zero-knowledge wrapper behind the private claims.
 - **Screen Studio** for the UI craft that shaped how Maestro looks.
+
+## Say hello
+
+Thanks for taking the time to look through Maestro. If any of it made you curious, or you just want to talk it through, I would love to hear from you. Find me at **@kelvinpraises** on Discord or Twitter.
