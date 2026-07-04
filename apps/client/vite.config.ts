@@ -44,6 +44,15 @@ export default defineConfig({
     }),
   ],
   resolve: {
+    // The four Soroban bindings are `file:`-linked from ../packages, so npm
+    // symlinks them into node_modules. By default Vite resolves a symlinked
+    // module's imports from its REAL path (apps/packages/*), where the bindings'
+    // own deps (@stellar/stellar-sdk, buffer) are not installed on a clean
+    // checkout — so `import "@stellar/stellar-sdk/contract"` fails the production
+    // build on CI/Vercel (it only "works" locally thanks to leftover per-package
+    // node_modules). Preserving symlinks resolves their imports from the client's
+    // node_modules, where those deps are hoisted.
+    preserveSymlinks: true,
     alias: {
       "@": resolve(__dirname, "./src"),
       // The generated Soroban bindings (linked from ../packages via
