@@ -17,3 +17,8 @@ context/
 # proving artifacts (vkey embedded at compile time, zkey/wasm used by the prover)
 !apps/contracts/circuits/out/
 !apps/contracts/circuits/out/**
+# generated contract bindings' built output — the client's `file:` deps resolve to
+# each package's dist/index.js, and a clean Vercel/CI checkout runs no build step for
+# these packages, so their dist must ship in the repo.
+!apps/packages/*/dist/
+!apps/packages/*/dist/**
