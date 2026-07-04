@@ -1,4 +1,4 @@
-import { createClient, type Client } from "@libsql/client";
+import type { Client } from "@libsql/client";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
@@ -37,4 +37,20 @@ function resolveConfig(): { url: string; authToken?: string } {
   return { url: fileUrl };
 }
 
-export const db: Client = createClient(resolveConfig());
+// libSQL ships two clients. The DEFAULT one links a NATIVE binding so it can open
+// a local `file:` database, and that binding does not bundle onto serverless hosts
+// like Vercel, so importing it there crashes the function at load. The "/web"
+// client is pure JS over HTTP and is the right one for a remote Turso URL. Pick
+// the client that matches the target, imported DYNAMICALLY so the native one is
+// never even loaded in a serverless (Turso) deploy.
+async function makeClient(): Promise<Client> {
+  const cfg = resolveConfig();
+  if (process.env.TURSO_DATABASE_URL) {
+    const { createClient } = await import("@libsql/client/web");
+    return createClient(cfg);
+  }
+  const { createClient } = await import("@libsql/client");
+  return createClient(cfg);
+}
+
+export const db: Client = await makeClient();
