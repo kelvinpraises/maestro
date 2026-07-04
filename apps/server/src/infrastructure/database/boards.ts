@@ -1,4 +1,4 @@
-import { db } from "./client.ts";
+import { db } from "./client.js";
 
 export interface BoardRecord {
   version: number;

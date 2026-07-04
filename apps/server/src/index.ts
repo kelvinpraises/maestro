@@ -24,7 +24,7 @@ import {
   getBoard,
   putBoard,
   countBoards,
-} from "./infrastructure/database/boards.ts";
+} from "./infrastructure/database/boards.js";
 
 // ── config ───────────────────────────────────────────────────────────────────
 

@@ -3,14 +3,15 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "The Family Board relay — a tiny, dependency-free versioned-blob store for Maestro's encrypted family sync.",
+  "description": "The Family Board relay: a tiny versioned-blob store (SQLite/libSQL) for Maestro's encrypted family sync.",
   "scripts": {
-    "dev": "node --experimental-strip-types src/index.ts",
-    "start": "node --experimental-strip-types src/index.ts",
+    "dev": "tsx src/index.ts",
+    "start": "tsx src/index.ts",
     "type-check": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "tsx": "^4.23.0",
     "typescript": "^5.9.3"
   },
   "dependencies": {

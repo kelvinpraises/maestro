@@ -18,7 +18,7 @@ export default async function handler(
   res: ServerResponse,
 ): Promise<void> {
   try {
-    const { handle } = await import("../src/index.ts");
+    const { handle } = await import("../src/index.js");
     // Strip the /api mount prefix so the router matches /board/:id and /health.
     const raw = req.url ?? "/";
     req.url = raw.replace(/^\/api(?=\/|$|\?)/, "") || "/";
