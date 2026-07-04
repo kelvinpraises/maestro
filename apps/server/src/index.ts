@@ -18,6 +18,7 @@
 // `infrastructure/database`.
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { pathToFileURL } from "node:url";
 import {
   migrate,
   getBoard,
@@ -32,12 +33,24 @@ const PORT = Number(process.env.PORT ?? 8787);
 const MAX_BLOB_BYTES = 256 * 1024; // ~256KB
 // Whole-body cap (blob + a little JSON envelope). Reject early, before parsing.
 const MAX_BODY_BYTES = MAX_BLOB_BYTES + 4 * 1024;
-// The client dev server. CORS is scoped to it (plus a couple of localhost ports).
-const ALLOWED_ORIGINS = new Set([
-  "http://localhost:5173",
-  "http://127.0.0.1:5173",
-  "http://localhost:4173", // vite preview
-]);
+// CORS. The frontend is served from a different origin than this relay (the Vercel
+// app talking to the Vercel/Turso API), so cross-origin fetches must be allowed.
+// Set CORS_ORIGINS (comma-separated) to lock it to specific domains; left unset,
+// we reflect whatever Origin asks. That is safe here: no cookies or auth to
+// protect, the blob is end-to-end encrypted, and the familyId is the only
+// capability.
+const CORS_ORIGINS = (process.env.CORS_ORIGINS ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+// Run the one-time schema migration lazily and exactly once. A long-running server
+// hits this on its first request; a serverless function hits it on a cold start.
+// The promise is memoized so concurrent requests share the single migration.
+let ready: Promise<void> | null = null;
+function ensureReady(): Promise<void> {
+  return (ready ??= migrate());
+}
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -49,7 +62,7 @@ function isValidFamilyId(id: string): boolean {
 
 function setCors(req: IncomingMessage, res: ServerResponse): void {
   const origin = req.headers.origin;
-  if (origin && ALLOWED_ORIGINS.has(origin)) {
+  if (origin && (CORS_ORIGINS.length === 0 || CORS_ORIGINS.includes(origin))) {
     res.setHeader("Access-Control-Allow-Origin", origin);
   }
   res.setHeader("Vary", "Origin");
@@ -90,7 +103,8 @@ function readBody(req: IncomingMessage): Promise<string> {
 
 // ── request handling ──────────────────────────────────────────────────────────
 
-async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
+export async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  await ensureReady();
   setCors(req, res);
 
   // CORS preflight.
@@ -133,24 +147,32 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 
   // ── PUT: accept only the exact next version; else 409 with the current one ───
   if (req.method === "PUT") {
-    let bodyText: string;
-    try {
-      bodyText = await readBody(req);
-    } catch (err) {
-      if ((err as Error).message === "PAYLOAD_TOO_LARGE") {
-        sendJson(res, 413, { error: "too_large" });
+    // Body: some hosts (Vercel functions) pre-parse a JSON body onto `req.body`
+    // and consume the stream; a plain node:http server does not. Handle both — use
+    // the pre-parsed object when it's there, otherwise read + parse the stream with
+    // our own byte cap.
+    let body: { version?: unknown; blob?: unknown };
+    const preParsed = (req as unknown as { body?: unknown }).body;
+    if (preParsed && typeof preParsed === "object") {
+      body = preParsed as { version?: unknown; blob?: unknown };
+    } else {
+      let bodyText: string;
+      try {
+        bodyText = await readBody(req);
+      } catch (err) {
+        if ((err as Error).message === "PAYLOAD_TOO_LARGE") {
+          sendJson(res, 413, { error: "too_large" });
+          return;
+        }
+        sendJson(res, 400, { error: "read_failed" });
         return;
       }
-      sendJson(res, 400, { error: "read_failed" });
-      return;
-    }
-
-    let body: { version?: unknown; blob?: unknown };
-    try {
-      body = JSON.parse(bodyText);
-    } catch {
-      sendJson(res, 400, { error: "bad_json" });
-      return;
+      try {
+        body = JSON.parse(bodyText);
+      } catch {
+        sendJson(res, 400, { error: "bad_json" });
+        return;
+      }
     }
 
     const { version, blob } = body;
@@ -186,14 +208,18 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   sendJson(res, 405, { error: "method_not_allowed" });
 }
 
-// ── boot ──────────────────────────────────────────────────────────────────────
+// ── boot: only when run directly (a serverless function imports `handle`) ──────
 
-await migrate();
-createServer((req, res) => {
-  handle(req, res).catch((err) => {
-    console.error("[board] unhandled error", err);
-    if (!res.headersSent) sendJson(res, 500, { error: "internal" });
+const runAsServer =
+  !!process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (runAsServer) {
+  createServer((req, res) => {
+    handle(req, res).catch((err) => {
+      console.error("[board] unhandled error", err);
+      if (!res.headersSent) sendJson(res, 500, { error: "internal" });
+    });
+  }).listen(PORT, () => {
+    console.log(`[board] family board relay listening on http://localhost:${PORT}`);
   });
-}).listen(PORT, () => {
-  console.log(`[board] family board relay listening on http://localhost:${PORT}`);
-});
+}
