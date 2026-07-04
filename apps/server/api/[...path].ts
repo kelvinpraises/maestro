@@ -2,24 +2,40 @@
 //
 // Vercel serves this file for every /api/* request. Its req/res are Node's
 // IncomingMessage/ServerResponse, which is exactly what the shared `handle`
-// speaks, so we just normalise the path and hand off. Importing `index.ts` does
-// NOT start a listener: the .listen() there is guarded to run only when the file
-// is executed directly (local dev / a persistent host).
+// speaks, so we normalise the path and hand off. The router + DB client are
+// imported lazily INSIDE the handler so that a load-time failure (a bad dep, a
+// missing env, etc.) is caught and returned as JSON rather than an opaque
+// FUNCTION_INVOCATION_FAILED.
 //
 // Deploy note: set TURSO_DATABASE_URL + TURSO_AUTH_TOKEN on this project so the
 // board persists (serverless has no durable disk). Point the client's
 // VITE_BOARD_URL at "<this-deployment-origin>/api".
 
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { handle } from "../src/index.ts";
 
 export default async function handler(
   req: IncomingMessage,
   res: ServerResponse,
 ): Promise<void> {
-  // Strip the /api mount prefix so the router matches its clean /board/:id and
-  // /health routes. Harmless if the prefix is already gone (the regex just no-ops).
-  const raw = req.url ?? "/";
-  req.url = raw.replace(/^\/api(?=\/|$|\?)/, "") || "/";
-  await handle(req, res);
+  try {
+    const { handle } = await import("../src/index.ts");
+    // Strip the /api mount prefix so the router matches /board/:id and /health.
+    const raw = req.url ?? "/";
+    req.url = raw.replace(/^\/api(?=\/|$|\?)/, "") || "/";
+    await handle(req, res);
+  } catch (err) {
+    const e = err as Error;
+    if (!res.headersSent) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify({
+          error: "boot_failed",
+          message: String(e?.message ?? e),
+          stack: String(e?.stack ?? "").split("\n").slice(0, 6),
+          hasTurso: !!process.env.TURSO_DATABASE_URL,
+          hasToken: !!process.env.TURSO_AUTH_TOKEN,
+        }),
+      );
+    }
+  }
 }
