@@ -1,0 +1,70 @@
+Register my project for the STRK20 Private Sprint, then set it up so I can start building.
+
+STEP 1 - REGISTER
+
+Fork https://github.com/starkience/strk20-hackathon and append one object to registry.json:
+
+   {
+     "repo_url": "<MY PUBLIC GITHUB REPO URL>",
+     "telegram": ["<MY TELEGRAM USERNAME>"]
+   }
+
+Do not modify any other entry. Open a pull request describing what I am
+building and who I am. That is the whole application - there is no second
+pull request.
+
+The repository must already have code in it. An empty repository registers
+fine and keeps its place, but it does not appear on the hub until there is a
+first commit - so push something before opening the pull request, even if it
+is only a README.
+
+STEP 2 - ADD strk20.json TO MY OWN REPOSITORY
+
+At the root, create strk20.json:
+
+   {
+     "transactions": [],
+     "contracts": [],
+     "demo_video": "",
+     "demo_url": ""
+   }
+
+Fill each field in as it comes to exist:
+- transactions: three Starknet mainnet transaction hashes that touched the
+  STRK20 pool at 0x040337b1af3c663e86e333bab5a4b28da8d4652a15a69beee2b677776ffe812a
+- contracts: any contract addresses I deploy
+- demo_video: a 3-minute demo video link
+- demo_url: only if the demo is not detected already. The repository's
+  Website field, GitHub Pages, and the most recent successful deployment
+  reported to GitHub (Vercel and Netlify report one on every deploy) are
+  all picked up without being declared
+
+STEP 3 - INSTALL THE STRK20 SKILLS
+
+   npx skills add welttowelt/strk20-skills
+
+Four skills, each firing on what I am actually doing: strk20-privacy for how
+the pool works and which integration route to take, strk20-wallet-api for a
+private dapp acting through the user's wallet, strk20-anonymizer-contracts for
+the Cairo privacy_invoke helper behind private DeFi, and strk20-privacy-sdk for
+holding keys directly. Each one bundles the upstream pages verbatim, so open
+the reference rather than recalling it.
+
+STEP 4 - LOAD THE CONTEXT
+
+- Docs: https://strk20-by-example.org/what-is-strk20
+  The whole site is mirrored as Markdown. Fetch
+  https://strk20-by-example.org/llms-full.txt instead of parsing pages.
+- Starter kit, Next.js - wallet picker, shield, unshield, private transfer:
+  https://github.com/Akashneelesh/strk20-starter-kit
+- SDKs, helper contracts and examples:
+  https://github.com/Akashneelesh/awesome-strk20
+- Ideas in scope: https://github.com/starkience/strk20-hackathon/blob/main/IDEAS.md
+
+Mainnet is CHAIN_ID SN_MAIN. Create a free Alchemy key at
+https://www.alchemy.com and point the RPC at
+https://starknet-mainnet.g.alchemy.com/v2/<YOUR_ALCHEMY_KEY>
+Keep the key in an env var. Never commit it.
+
+Nothing else is submitted. Pushes, stack, contracts, demo and builders are
+read from my repository every 30 minutes.
