@@ -12,12 +12,15 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@starknet-io/get-starknet-wallet-standard-v6": "npm:@starknet-io/get-starknet-wallet-standard@^6.0.4",
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/react-devtools": "latest",
     "@tanstack/react-router": "latest",
     "@tanstack/react-router-devtools": "latest",
+    "get-starknet": "^4.0.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "starknet": "^10.7.1",
     "tailwindcss": "^4.1.18"
   },
   "devDependencies": {
