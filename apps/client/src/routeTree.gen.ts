@@ -10,11 +10,17 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as DevBoardRouteImport } from './routes/dev.board'
 import { Route as DevMoneyRouteImport } from './routes/dev.money'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DevBoardRoute = DevBoardRouteImport.update({
+  id: '/dev/board',
+  path: '/dev/board',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DevMoneyRoute = DevMoneyRouteImport.update({
@@ -25,27 +31,31 @@ const DevMoneyRoute = DevMoneyRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/dev/board': typeof DevBoardRoute
   '/dev/money': typeof DevMoneyRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/dev/board': typeof DevBoardRoute
   '/dev/money': typeof DevMoneyRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/dev/board': typeof DevBoardRoute
   '/dev/money': typeof DevMoneyRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/dev/money'
+  fullPaths: '/' | '/dev/board' | '/dev/money'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/dev/money'
-  id: '__root__' | '/' | '/dev/money'
+  to: '/' | '/dev/board' | '/dev/money'
+  id: '__root__' | '/' | '/dev/board' | '/dev/money'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  DevBoardRoute: typeof DevBoardRoute
   DevMoneyRoute: typeof DevMoneyRoute
 }
 
@@ -56,6 +66,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dev/board': {
+      id: '/dev/board'
+      path: '/dev/board'
+      fullPath: '/dev/board'
+      preLoaderRoute: typeof DevBoardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dev/money': {
@@ -70,6 +87,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  DevBoardRoute: DevBoardRoute,
   DevMoneyRoute: DevMoneyRoute,
 }
 export const routeTree = rootRouteImport
