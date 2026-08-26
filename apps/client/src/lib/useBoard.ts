@@ -6,7 +6,7 @@ import { importKey, load, save, type Board } from './board'
   /** Board data once loaded; null before the family exists or first load completes. */
   board: Board | null
   /** Apply a mutation through the encrypted read-modify-write loop. */
-  mutate: (mutator: (board: Board) => void) => Promise<void>
+  mutate: (mutator: (board: Board) => void) => Promise<Board>
   syncing: boolean
   error: string | null
 }
@@ -47,6 +47,7 @@ export function useBoard(): UseBoard {
       const key = await importKey(rawKey)
       const { board: next } = await save(BOARD_URL, familyId, key, mutator)
       setBoard(next)
+      return next
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
       throw e

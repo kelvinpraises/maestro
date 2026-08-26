@@ -34,3 +34,7 @@ assert.deepEqual(approveCall(token, drips, 1n << 128n), {
 assert.deepEqual(claimAsCall(drips, '0x42'), { contractAddress: drips, entrypoint: 'claim_as', calldata: ['66'] })
 
 console.log('drips.test: all assertions passed')
+
+import { balanceOfCall } from './drips-calls.ts'
+assert.deepEqual(balanceOfCall('0xtok', '0x9'), { contractAddress: '0xtok', entrypoint: 'balance_of', calldata: ['9'] })
+console.log('(balance_of ok)')

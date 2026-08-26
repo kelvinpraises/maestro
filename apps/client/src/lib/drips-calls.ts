@@ -24,3 +24,8 @@ export function openStreamSplitCall(drips: string, recipients: Array<{ address: 
 export function claimAsCall(drips: string, who: string): Call {
   return { contractAddress: drips, entrypoint: 'claim_as', calldata: [BigInt(who).toString()] }
 }
+
+/** ERC-20 balance_of(owner) → u256 low/high calldata. */
+export function balanceOfCall(token: string, owner: string): Call {
+  return { contractAddress: token, entrypoint: 'balance_of', calldata: [BigInt(owner).toString()] }
+}

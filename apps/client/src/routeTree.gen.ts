@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AllowanceRouteImport } from './routes/allowance'
 import { Route as ChoresRouteImport } from './routes/chores'
+import { Route as GoalsRouteImport } from './routes/goals'
 import { Route as PotRouteImport } from './routes/pot'
 import { Route as StashRouteImport } from './routes/stash'
 import { Route as DevBoardRouteImport } from './routes/dev.board'
@@ -30,6 +31,11 @@ const AllowanceRoute = AllowanceRouteImport.update({
 const ChoresRoute = ChoresRouteImport.update({
   id: '/chores',
   path: '/chores',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GoalsRoute = GoalsRouteImport.update({
+  id: '/goals',
+  path: '/goals',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PotRoute = PotRouteImport.update({
@@ -57,6 +63,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/allowance': typeof AllowanceRoute
   '/chores': typeof ChoresRoute
+  '/goals': typeof GoalsRoute
   '/pot': typeof PotRoute
   '/stash': typeof StashRoute
   '/dev/board': typeof DevBoardRoute
@@ -66,6 +73,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/allowance': typeof AllowanceRoute
   '/chores': typeof ChoresRoute
+  '/goals': typeof GoalsRoute
   '/pot': typeof PotRoute
   '/stash': typeof StashRoute
   '/dev/board': typeof DevBoardRoute
@@ -76,6 +84,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/allowance': typeof AllowanceRoute
   '/chores': typeof ChoresRoute
+  '/goals': typeof GoalsRoute
   '/pot': typeof PotRoute
   '/stash': typeof StashRoute
   '/dev/board': typeof DevBoardRoute
@@ -87,6 +96,7 @@ export interface FileRouteTypes {
     | '/'
     | '/allowance'
     | '/chores'
+    | '/goals'
     | '/pot'
     | '/stash'
     | '/dev/board'
@@ -96,6 +106,7 @@ export interface FileRouteTypes {
     | '/'
     | '/allowance'
     | '/chores'
+    | '/goals'
     | '/pot'
     | '/stash'
     | '/dev/board'
@@ -105,6 +116,7 @@ export interface FileRouteTypes {
     | '/'
     | '/allowance'
     | '/chores'
+    | '/goals'
     | '/pot'
     | '/stash'
     | '/dev/board'
@@ -115,6 +127,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AllowanceRoute: typeof AllowanceRoute
   ChoresRoute: typeof ChoresRoute
+  GoalsRoute: typeof GoalsRoute
   PotRoute: typeof PotRoute
   StashRoute: typeof StashRoute
   DevBoardRoute: typeof DevBoardRoute
@@ -142,6 +155,13 @@ declare module '@tanstack/react-router' {
       path: '/chores'
       fullPath: '/chores'
       preLoaderRoute: typeof ChoresRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/goals': {
+      id: '/goals'
+      path: '/goals'
+      fullPath: '/goals'
+      preLoaderRoute: typeof GoalsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/pot': {
@@ -179,6 +199,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AllowanceRoute: AllowanceRoute,
   ChoresRoute: ChoresRoute,
+  GoalsRoute: GoalsRoute,
   PotRoute: PotRoute,
   StashRoute: StashRoute,
   DevBoardRoute: DevBoardRoute,

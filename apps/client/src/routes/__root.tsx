@@ -17,6 +17,9 @@ function RootComponent() {
         <nav className="flex gap-3 text-sm font-extrabold">
           <a href="/pot" className="hover:underline">Pot</a>
           <a href="/chores" className="hover:underline">Chores</a>
+          <a href="/allowance" className="hover:underline">Allowance</a>
+          <a href="/stash" className="hover:underline">Stash</a>
+          <a href="/goals" className="hover:underline">Goals</a>
           <a href="/dev/board" className="text-xs opacity-50 hover:underline">dev·board</a>
           <a href="/dev/money" className="text-xs opacity-50 hover:underline">dev·money</a>
         </nav>

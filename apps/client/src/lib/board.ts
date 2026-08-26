@@ -32,6 +32,24 @@ export interface Board {
   members?: Member[]
   /** Drip streams opened by the parent (weights mirror on-chain shares). */
   streams?: Array<{ id: string; recipients: Array<{ address: string; share: string }>; amount: string; ratePerSec: string; openedAt: string }>
+  /** Board v3: kid savings goals + daily check-in streaks. Normalized to []. */
+  goals?: Goal[]
+  streaks?: Streak[]
+}
+
+export interface Goal {
+  kidAddress: string
+  title: string
+  /** Target in STRK smallest units (felt string). */
+  targetAmount: string
+  createdAt: string
+}
+
+export interface Streak {
+  kidAddress: string
+  /** Last checked-in UTC day, YYYY-MM-DD. */
+  lastDay: string
+  count: number
 }
 
 export const EMPTY_BOARD: Board = { chores: [], approvals: [], notices: [], members: [] } // treat as immutable
@@ -130,6 +148,8 @@ function validateShape(v: unknown): Board {
   // v1 blobs predate members and per-chore state — normalize forward.
   board.members ??= []
   board.streams ??= []
+  board.goals ??= []
+  board.streaks ??= []
   for (const c of board.chores) {
     ;(c as Chore).reward ??= '0'
     ;(c as Chore).state ??= 'todo'
