@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import type { WalletAccountV6 } from 'starknet'
 import { useBoard } from '#/lib/useBoard'
+import { toast } from '#/lib/toast'
 import { useWallet } from '#/lib/walletStore'
 import { currentRole, setRole } from '#/lib/family'
 import { touchStreak, streakFor, progressFraction, addGoal, utcDay } from '#/lib/goal-logic'
@@ -25,8 +26,12 @@ function Goals() {
   const [title, setTitle] = useState('')
   const [target, setTarget] = useState('5')
   const [balance, setBalance] = useState<bigint | null>(null)
-  const [out, setOut] = useState('')
-  const log = (l: string) => setOut((o) => `${o}\n${l}`)
+  const log = (l: string) => toast(l)
+
+  // Board sync failures surface as toasts, not inline blocks.
+  useEffect(() => {
+    if (error) toast(error, 'error')
+  }, [error])
 
   // Real balance climbing: public STRK + shielded pool balance.
   useEffect(() => {
@@ -96,9 +101,6 @@ function Goals() {
         </div>
       </section>
 
-      {(error || out.trim()) && (
-        <pre className="card-pop whitespace-pre-wrap !p-3 text-xs text-red-600">{error ?? out}</pre>
-      )}
 
       {balance !== null && (
         <p className="text-sm font-bold">
@@ -110,7 +112,7 @@ function Goals() {
       <GoalList board={board} kidAddress={account?.address} balance={balance} />
 
       <section className="card-pop space-y-2">
-        <h2 className="font-extrabold">New goal</h2>
+        <h2 className="label">New goal</h2>
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
@@ -139,7 +141,7 @@ function GoalList({ board, kidAddress, balance }: { board: ReturnType<typeof use
   if (goals.length === 0) return <p className="text-sm opacity-60">No goals yet.</p>
   return (
     <section className="space-y-2">
-      <h2 className="font-extrabold">Savings goals</h2>
+      <h2 className="label">Savings goals</h2>
       {goals.map((g) => {
         const frac = balance != null && balance !== undefined ? progressFraction(BigInt(g.targetAmount), balance) : 0
         const reached = frac >= 1

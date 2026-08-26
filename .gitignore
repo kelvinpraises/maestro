@@ -23,3 +23,8 @@ context/
 !apps/packages/*/dist/
 !apps/packages/*/dist/**
 .snfoundry_cache/
+
+# real deployment values (placeholders are committed; deploy.sh fills these)
+apps/contracts/deployments.sepolia.env
+apps/contracts/deployments.mainnet.env
+!apps/contracts/deployments.*.env.example

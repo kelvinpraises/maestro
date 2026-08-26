@@ -64,3 +64,18 @@ body {
 }
 
 
+
+/* Subtle dot grid on the canvas — the deck's playful backdrop. */
+body {
+  background-image: radial-gradient(oklch(0.85 0.03 92 / 0.9) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+/* Uppercase micro-label used above sections, per design refs. */
+.label {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.55;
+}

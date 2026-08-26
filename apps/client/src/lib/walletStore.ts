@@ -21,6 +21,10 @@ function subscribe(l: () => void) {
   return () => listeners.delete(l)
 }
 
+export function getWallet(): WalletState {
+  return state
+}
+
 export function useWallet(): WalletState {
   return useSyncExternalStore(subscribe, () => state)
 }

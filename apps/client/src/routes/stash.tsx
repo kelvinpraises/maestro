@@ -84,7 +84,7 @@ function Stash() {
       )}
 
       <section className="card-pop space-y-2">
-        <h2 className="font-extrabold">Your allowance drip</h2>
+        <h2 className="label">Your allowance drip</h2>
         {!joined ? (
           <p className="text-sm opacity-60">
             Join the family on the Chores screen first — your reward address is how the stream finds you.

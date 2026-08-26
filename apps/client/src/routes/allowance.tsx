@@ -80,7 +80,7 @@ function Allowance() {
       )}
 
       <section className="card-pop space-y-2">
-        <h2 className="font-extrabold">Open a drip stream</h2>
+        <h2 className="label">Open a drip stream</h2>
         {kids.length === 0 && <p className="text-sm opacity-60">No kids registered on the board yet.</p>}
         {kids.map((m) => (
           <label key={m.address} className="flex items-center justify-between gap-2 text-sm font-bold">

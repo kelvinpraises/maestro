@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import type { WalletAccountV6 } from 'starknet'
 import { useBoard } from '#/lib/useBoard'
+import { useEffect } from 'react'
+import { toast } from '#/lib/toast'
 import { useWallet } from '#/lib/walletStore'
 import { currentRole, setRole } from '#/lib/family'
 import { shieldedBalances, privateTransfer } from '#/lib/strk20'
@@ -24,8 +26,12 @@ function Pot() {
   const { account, chainId } = useWallet()
   const [title, setTitle] = useState('')
   const [reward, setReward] = useState('1')
-  const [out, setOut] = useState('')
-  const log = (l: string) => setOut((o) => `${o}\n${l}`)
+  const log = (l: string) => toast(l)
+
+  // Board sync failures surface as toasts, not inline blocks.
+  useEffect(() => {
+    if (error) toast(error, 'error')
+  }, [error])
 
   if (currentRole() !== 'parent') {
     return (
@@ -107,12 +113,9 @@ function Pot() {
     <div className="space-y-4 py-2">
       <h1 className="text-2xl font-extrabold">Pot</h1>
 
-      {(error || out.trim()) && (
-        <pre className="card-pop whitespace-pre-wrap !p-3 text-xs text-red-600">{error ?? out}</pre>
-      )}
 
       <section className="card-pop space-y-2">
-        <h2 className="font-extrabold">Post a chore</h2>
+        <h2 className="label">Post a chore</h2>
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
@@ -135,7 +138,7 @@ function Pot() {
 
       {needsNod.length > 0 && (
         <section className="space-y-2">
-          <h2 className="font-extrabold">Needs your nod</h2>
+          <h2 className="label">Needs your nod</h2>
           {needsNod.map((c) => (
             <div key={c.id} className="card-pop flex items-center justify-between" style={{ background: 'var(--m-gold)' }}>
               <div>
@@ -157,7 +160,7 @@ function Pot() {
       )}
 
       <section className="space-y-2">
-        <h2 className="font-extrabold">Chores</h2>
+        <h2 className="label">Chores</h2>
         {rest.length === 0 && <p className="text-sm opacity-60">No chores yet.</p>}
         {rest.map((c) => (
           <div key={c.id} className="card-pop flex items-center justify-between">
