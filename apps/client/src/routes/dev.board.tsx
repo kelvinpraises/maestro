@@ -37,15 +37,15 @@ function BoardPlayground() {
   }
 
   function addChore() {
-    void mutate((b) => b.chores.push({ id: crypto.randomUUID(), title: `chore ${Date.now() % 1000}`, done: false }))
+    void mutate((b) => b.chores.push({ id: crypto.randomUUID(), title: `chore ${Date.now() % 1000}`, reward: '1000000000000000000', state: 'todo' }))
       .then(() => log('chore added'))
       .catch(() => {})
   }
 
   function approveChore() {
     void mutate((b) => {
-      const open = b.chores.find((c) => c.done && !b.approvals.some((a) => a.choreId === c.id))
-      if (!open) throw new Error('no done-and-unapproved chore to approve')
+      const open = b.chores.find((c) => c.state === 'todo')
+      if (!open) throw new Error('no unclaimed chore to approve')
       b.approvals.push({ id: crypto.randomUUID(), choreId: open.id, at: new Date().toISOString() })
     })
       .then(() => log('chore approved'))

@@ -6,13 +6,33 @@
 // encryption, never reused. The relay stores opaque bytes; familyId is the only
 // "auth", the key never leaves localStorage.
 
-export interface Board {
-  chores: Array<{ id: string; title: string; done: boolean }>
-  approvals: Array<{ id: string; choreId: string; at: string }>
-  notices: Array<{ id: string; text: string; at: string }>
+export type FamilyRole = 'parent' | 'kid'
+
+export interface Chore {
+  id: string
+  title: string
+  /** Reward in STRK smallest units (felt string). */
+  reward: string
+  /** todo → pending (kid claimed) → paying (payout firing) → approved (paid). */
+  state: 'todo' | 'pending' | 'paying' | 'approved'
 }
 
-export const EMPTY_BOARD: Board = { chores: [], approvals: [], notices: [] } // treat as immutable
+export interface Member {
+  name: string
+  role: FamilyRole
+  /** Kid: the stash address rewards are privately transferred to. */
+  address: string
+}
+
+export interface Board {
+  chores: Chore[]
+  approvals: Array<{ id: string; choreId: string; at: string; txHash?: string }>
+  notices: Array<{ id: string; text: string; at: string }>
+  /** Board v2. Absent in v1 blobs — normalized to []. */
+  members?: Member[]
+}
+
+export const EMPTY_BOARD: Board = { chores: [], approvals: [], notices: [], members: [] } // treat as immutable
 
 
 const FAMILY_KEY = 'maestro.board.key'
@@ -104,7 +124,14 @@ function validateShape(v: unknown): Board {
   if (typeof v !== 'object' || v === null || !('chores' in v) || !('approvals' in v) || !('notices' in v)) {
     throw new Error('board blob has wrong shape')
   }
-  return v as Board
+  const board = v as Board
+  // v1 blobs predate members and per-chore state — normalize forward.
+  board.members ??= []
+  for (const c of board.chores) {
+    ;(c as Chore).reward ??= '0'
+    ;(c as Chore).state ??= 'todo'
+  }
+  return board
 }
 
 /**

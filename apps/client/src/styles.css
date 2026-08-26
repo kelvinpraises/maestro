@@ -15,3 +15,52 @@ body {
   margin: 0;
 }
 
+:root {
+  /* Maestro palette (portable subset of the redacted app's identity): warm cream canvas, white card-pop cards, bright grass-green primary, lavender chips. */
+  --m-canvas: oklch(0.975 0.014 92);
+  --m-foreground: oklch(0.26 0.03 285);
+  --m-muted: oklch(0.52 0.03 285);
+  --m-green: oklch(0.78 0.2 150);
+  --m-green-ink: oklch(0.4 0.16 152);
+  --m-gold: oklch(0.83 0.16 88);
+  --m-lavender: oklch(0.93 0.03 295);
+  --m-pink: oklch(0.8 0.13 8);
+  /* Soft-neubrutalism: one warm near-black outline + one hard offset shadow. */
+  --m-ink: oklch(0.24 0.03 60);
+  --m-pop: 3px 3px 0 0 var(--m-ink);
+  --m-radius-pop: 1.4rem;
+}
+
+body {
+  background: var(--m-canvas);
+  color: var(--m-foreground);
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+}
+
+/* Chunky floating card — the app's one visual voice. */
+.card-pop {
+  background: white;
+  border: 2px solid var(--m-ink);
+  border-radius: var(--m-radius-pop);
+  box-shadow: var(--m-pop);
+  padding: 1rem;
+}
+
+.btn-pop {
+  background: var(--m-green);
+  color: oklch(0.22 0.05 155);
+  border: 2px solid var(--m-ink);
+  border-radius: 9999px;
+  box-shadow: 2px 2px 0 0 var(--m-ink);
+  padding: 0.5rem 1rem;
+  font-weight: 800;
+}
+.btn-pop:active {
+  translate: 2px 2px;
+  box-shadow: none;
+}
+.btn-pop:disabled {
+  opacity: 0.5;
+}
+
+

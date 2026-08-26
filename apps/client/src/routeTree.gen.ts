@@ -10,12 +10,24 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ChoresRouteImport } from './routes/chores'
+import { Route as PotRouteImport } from './routes/pot'
 import { Route as DevBoardRouteImport } from './routes/dev.board'
 import { Route as DevMoneyRouteImport } from './routes/dev.money'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChoresRoute = ChoresRouteImport.update({
+  id: '/chores',
+  path: '/chores',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PotRoute = PotRouteImport.update({
+  id: '/pot',
+  path: '/pot',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DevBoardRoute = DevBoardRouteImport.update({
@@ -31,30 +43,38 @@ const DevMoneyRoute = DevMoneyRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/chores': typeof ChoresRoute
+  '/pot': typeof PotRoute
   '/dev/board': typeof DevBoardRoute
   '/dev/money': typeof DevMoneyRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/chores': typeof ChoresRoute
+  '/pot': typeof PotRoute
   '/dev/board': typeof DevBoardRoute
   '/dev/money': typeof DevMoneyRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/chores': typeof ChoresRoute
+  '/pot': typeof PotRoute
   '/dev/board': typeof DevBoardRoute
   '/dev/money': typeof DevMoneyRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/dev/board' | '/dev/money'
+  fullPaths: '/' | '/chores' | '/pot' | '/dev/board' | '/dev/money'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/dev/board' | '/dev/money'
-  id: '__root__' | '/' | '/dev/board' | '/dev/money'
+  to: '/' | '/chores' | '/pot' | '/dev/board' | '/dev/money'
+  id: '__root__' | '/' | '/chores' | '/pot' | '/dev/board' | '/dev/money'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ChoresRoute: typeof ChoresRoute
+  PotRoute: typeof PotRoute
   DevBoardRoute: typeof DevBoardRoute
   DevMoneyRoute: typeof DevMoneyRoute
 }
@@ -66,6 +86,20 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/chores': {
+      id: '/chores'
+      path: '/chores'
+      fullPath: '/chores'
+      preLoaderRoute: typeof ChoresRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pot': {
+      id: '/pot'
+      path: '/pot'
+      fullPath: '/pot'
+      preLoaderRoute: typeof PotRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dev/board': {
@@ -87,6 +121,8 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ChoresRoute: ChoresRoute,
+  PotRoute: PotRoute,
   DevBoardRoute: DevBoardRoute,
   DevMoneyRoute: DevMoneyRoute,
 }

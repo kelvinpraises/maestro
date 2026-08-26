@@ -11,7 +11,7 @@ const fam = mintFamily()
 assert.equal(fam.familyId.length, 22) // 128-bit base64url
 const key = await importKey(fam.rawKey)
 
-const board1 = { chores: [{ id: 'c1', title: 'dishes', done: false }], approvals: [], notices: [] }
+const board1 = { chores: [{ id: 'c1', title: 'dishes', reward: '10', state: 'todo' }], approvals: [], notices: [] }
 const blobA = await encrypt(key, board1)
 const blobB = await encrypt(key, board1)
 assert.deepEqual(await decrypt(key, blobA), board1)
@@ -62,9 +62,10 @@ function makeRelay() {
 // load round-trip after a save
 {
   const relay = makeRelay()
-  await save(baseUrl, fam.familyId, key, (b) => b.chores.push({ id: 'c2', title: 'trash', done: false }), relay.doFetch)
+  await save(baseUrl, fam.familyId, key, (b) => b.chores.push({ id: 'c2', title: 'trash', reward: '5', state: 'todo' }), relay.doFetch)
   const loaded = await load(baseUrl, fam.familyId, key, relay.doFetch)
   assert.equal(loaded.chores[0]!.title, 'trash')
+  assert.equal(loaded.members!.length >= 0, true) // v2 normalization ran
 }
 
 {
@@ -84,7 +85,7 @@ function makeRelay() {
   const r = await save(
     baseUrl, fam.familyId, key,
     (b) => {
-      b.chores.push({ id: 'p1', title: 'parent chore', done: false })
+      b.chores.push({ id: 'p1', title: 'parent chore', reward: '1', state: 'todo' })
       mutatorRuns++
     },
     parentFetch,

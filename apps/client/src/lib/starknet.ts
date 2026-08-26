@@ -1,11 +1,15 @@
 import { RpcProvider } from 'starknet'
-import { chainName, rpcUrlForChain } from './chains'
+import { chainName, rpcUrlForChain, strkTokenForChain } from './chains'
 
 export { chainName }
 
 /** RPC URL for the wallet's chain from env; null when the chain has no config. */
 export function rpcUrlFor(chainId: string): string | null {
   return rpcUrlForChain(import.meta.env as Record<string, string | undefined>, chainId)
+}
+
+export function strkToken(chainId: string): string | null {
+  return strkTokenForChain(import.meta.env as Record<string, string | undefined>, chainId)
 }
 
 const providers = new Map<string, RpcProvider>()
