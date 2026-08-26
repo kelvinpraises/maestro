@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { disconnect as gsDisconnect, connect as gsConnect } from 'get-starknet'
 import { StarknetInjectedWallet } from '@starknet-io/get-starknet-wallet-standard-v6'
 import { WalletAccountV6 } from 'starknet'
-import { provider, chainName, trimAddress } from '#/lib/starknet'
+import { providerForChain, chainName, trimAddress } from '#/lib/starknet'
 
 // Connect button: detect Argent/Braavos via get-starknet, connect through
 // WalletAccountV6, show trimmed address + chain-derived network badge.
@@ -11,6 +11,9 @@ export function WalletButton() {
   const [chainId, setChainId] = useState<string | null>(null)
   const [connecting, setConnecting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Future tx code fetches the chain-correct provider via providerForChain(chainId) —
+  // the per-chain cache in lib/starknet.ts is warmed here at connect time.
 
   // get-starknet v4 and the wallet-standard v6 wrapper pin different @starknet-io/types-js
   // majors; same runtime shape, so one cast bridges them at this single point.
@@ -33,10 +36,26 @@ export function WalletButton() {
     setError(null)
     try {
       const swo = await gsConnect({ modalMode: 'canAsk' })
-      if (!swo) return
+      if (!swo) {
+        setError('No Starknet wallet found — install Argent or Braavos, or connection was cancelled.')
+        return
+      }
       type SwoV6 = ConstructorParameters<typeof StarknetInjectedWallet>[0]
       const w = new StarknetInjectedWallet(swo as unknown as SwoV6)
-      const acct = await WalletAccountV6.connect(provider, w)
+
+      // Chain first: provider must target the WALLET's chain, not env's.
+      const cid = await swo.request({ type: 'wallet_requestChainId' })
+      setChainId(cid ?? null)
+      const p = providerForChain(cid)
+      // Verify the endpoint actually serves that chain — env misconfig surfaces
+      // here as a visible error instead of a silent signature failure later.
+      const rpcChain = await p.getChainId()
+      if (rpcChain !== cid) {
+        setError(`RPC for ${chainName(cid)} answered on ${chainName(rpcChain)} — fix VITE_RPC_URL_* in .env.local.`)
+        return
+      }
+
+      const acct = await WalletAccountV6.connect(p, w)
       setAccount(acct)
       setSwo(swo)
     } catch (e) {
