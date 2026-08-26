@@ -14,13 +14,11 @@ pub trait ITestToken<TState> {
 #[starknet::contract]
 pub mod MockToken {
     use core::traits::TryInto;
-    use starknet::{
-        ContractAddress, get_caller_address,
-        storage::{
-            Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
-            StoragePointerWriteAccess,
-        },
+    use starknet::storage::{
+        Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
+        StoragePointerWriteAccess,
     };
+    use starknet::{ContractAddress, get_caller_address};
 
     #[starknet::interface]
     pub trait IMintable<TState> {
@@ -55,11 +53,7 @@ pub mod MockToken {
         fn mint(ref self: ContractState, to: ContractAddress, amount: u256) {
             self.balances.write(to, self.balances.read(to) + amount);
             self.total_supply.write(self.total_supply.read() + amount);
-            self.emit(
-                Event::Transfer(
-                    Transfer { from: 0.try_into().unwrap(), to, value: amount },
-                ),
-            );
+            self.emit(Event::Transfer(Transfer { from: 0.try_into().unwrap(), to, value: amount }));
         }
     }
 

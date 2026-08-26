@@ -14,15 +14,17 @@ pub trait IDrips<TState> {
     ) -> u256;
     fn accrued_at(self: @TState, t: u64) -> u256;
     fn claim(ref self: TState) -> u256;
+    fn pause(ref self: TState);
+    fn resume(ref self: TState);
+    fn close(ref self: TState);
 }
 
 #[starknet::contract]
 pub mod Drips {
-    use core::num::traits::SaturatingAdd;
-    use starknet::{
-        ContractAddress, get_block_timestamp, get_caller_address, get_contract_address,
-        storage::StoragePointerReadAccess, storage::StoragePointerWriteAccess,
-    };
+    use core::num::traits::{SaturatingAdd, SaturatingSub};
+    use core::traits::TryInto;
+    use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
+    use starknet::{ContractAddress, get_block_timestamp, get_caller_address, get_contract_address};
 
     #[starknet::interface]
     pub trait IERC20<TState> {
@@ -37,6 +39,9 @@ pub mod Drips {
     pub enum Event {
         StreamOpened: StreamOpened,
         Claimed: Claimed,
+        Paused: Paused,
+        Resumed: Resumed,
+        StreamClosed: StreamClosed,
     }
 
     #[derive(Drop, starknet::Event)]
@@ -55,6 +60,18 @@ pub mod Drips {
         pub amount: u256,
     }
 
+    #[derive(Drop, starknet::Event)]
+    pub struct Paused {}
+
+    #[derive(Drop, starknet::Event)]
+    pub struct Resumed {}
+
+    #[derive(Drop, starknet::Event)]
+    pub struct StreamClosed {
+        pub caller: ContractAddress,
+    }
+
+
     #[storage]
     struct Storage {
         token: ContractAddress,
@@ -66,6 +83,11 @@ pub mod Drips {
         deposited: u256,
         claimed_total: u256,
         active: bool,
+        paused: bool,
+        // seconds of accrual credited when the stream was paused
+        paused_elapsed: u64,
+        // seconds from pause-time to the original end
+        paused_remaining: u64,
     }
 
     #[constructor]
@@ -87,6 +109,12 @@ pub mod Drips {
             }
             let start = self.start.read();
             let end = self.end.read();
+            // While paused, accrual is frozen at pause-time.
+            let t = if self.paused.read() {
+                start + self.paused_elapsed.read()
+            } else {
+                t
+            };
             if t >= end {
                 return self.deposited.read();
             }
@@ -96,7 +124,11 @@ pub mod Drips {
             let elapsed: u256 = (t - start).into();
             let accrued = elapsed * self.rate_per_sec.read().into();
             let deposited = self.deposited.read();
-            if accrued > deposited { deposited } else { accrued }
+            if accrued > deposited {
+                deposited
+            } else {
+                accrued
+            }
         }
     }
 
@@ -108,18 +140,18 @@ pub mod Drips {
         /// caller (needs prior approval) and let it flow to `recipient` at
         /// `rate_per_sec` until it runs dry at `start + amount/rate`.
         fn open_stream(
-            ref self: ContractState,
-            recipient: ContractAddress,
-            rate_per_sec: u128,
-            amount: u256,
+            ref self: ContractState, recipient: ContractAddress, rate_per_sec: u128, amount: u256,
         ) -> u256 {
             assert(!self.active.read(), 'stream already open');
             assert(rate_per_sec > 0, 'rate must be positive');
             assert(amount > 0, 'amount must be positive');
+            let zero: ContractAddress = TryInto::try_into(0).unwrap();
+            assert(recipient != zero, 'recipient required');
 
             let sender = get_caller_address();
-            IERC20Dispatcher { contract_address: self.token.read() }
-                .transfer_from(sender, get_contract_address(), amount);
+            let dispatcher = IERC20Dispatcher { contract_address: self.token.read() };
+            let ok = dispatcher.transfer_from(sender, get_contract_address(), amount);
+            assert(ok, 'transfer_from failed');
 
             let now_ = get_block_timestamp();
             let duration_u256: u256 = amount / rate_per_sec.into();
@@ -136,14 +168,14 @@ pub mod Drips {
             self.deposited.write(amount);
             self.claimed_total.write(0);
             self.active.write(true);
+            self.paused.write(false);
 
-            self.emit(
-                Event::StreamOpened(
-                    StreamOpened {
-                        sender, recipient, rate_per_sec, amount, start: now_, end,
-                    },
-                ),
-            );
+            self
+                .emit(
+                    Event::StreamOpened(
+                        StreamOpened { sender, recipient, rate_per_sec, amount, start: now_, end },
+                    ),
+                );
             amount
         }
 
@@ -152,8 +184,9 @@ pub mod Drips {
             self.accrued_impl(t)
         }
 
-        /// Pay out everything accrued but unclaimed. A second claim right after
-        /// yields nothing until new time accrues or the final dust releases.
+        /// Pay out everything accrued but unclaimed. When the final claim
+        /// drains the deposit (auto-reopen model), the slot is freed so a new
+        /// `open_stream` needs no separate close tx.
         fn claim(ref self: ContractState) -> u256 {
             assert(self.active.read(), 'no active stream');
 
@@ -162,11 +195,56 @@ pub mod Drips {
             let amount = total - self.claimed_total.read();
             assert(amount > 0, 'nothing to claim');
 
+            // checks-effects-interactions: write before transfer
             self.claimed_total.write(total);
+            if total == self.deposited.read() {
+                self.active.write(false);
+            }
             IERC20Dispatcher { contract_address: self.token.read() }.transfer(recipient, amount);
 
             self.emit(Event::Claimed(Claimed { recipient, amount }));
             amount
+        }
+
+        /// Freeze accrual at pause-time. Sender-only.
+        fn pause(ref self: ContractState) {
+            assert(get_caller_address() == self.sender.read(), 'caller is not sender');
+            assert(self.active.read(), 'no active stream');
+            assert(!self.paused.read(), 'stream paused');
+
+            let now_ = get_block_timestamp();
+            let end = self.end.read();
+            self.paused_elapsed.write(core::cmp::min(now_, end) - self.start.read());
+            self.paused_remaining.write(end.saturating_sub(now_));
+            self.paused.write(true);
+            self.emit(Event::Paused(Paused {}));
+        }
+
+        /// Unfreeze: shift start/end so only post-resume seconds accrue.
+        /// Sender-only.
+        fn resume(ref self: ContractState) {
+            assert(get_caller_address() == self.sender.read(), 'caller is not sender');
+            assert(self.active.read(), 'no active stream');
+            assert(self.paused.read(), 'not paused');
+
+            let now_ = get_block_timestamp();
+            self.start.write(now_ - self.paused_elapsed.read());
+            self.end.write(now_.saturating_add(self.paused_remaining.read()));
+            self.paused.write(false);
+            self.emit(Event::Resumed(Resumed {}));
+        }
+
+        /// Free a drained-but-unclaimed slot. Dust is forfeited (refunds
+        /// nothing). Sender or recipient only.
+        fn close(ref self: ContractState) {
+            let caller = get_caller_address();
+            assert(caller == self.sender.read() || caller == self.recipient.read(), 'unauthorized');
+            assert(self.active.read(), 'no active stream');
+            assert(get_block_timestamp() >= self.end.read(), 'not drained');
+
+            self.active.write(false);
+            self.deposited.write(0);
+            self.emit(Event::StreamClosed(StreamClosed { caller }));
         }
     }
 }
