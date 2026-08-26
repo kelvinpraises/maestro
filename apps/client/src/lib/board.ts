@@ -30,6 +30,8 @@ export interface Board {
   notices: Array<{ id: string; text: string; at: string }>
   /** Board v2. Absent in v1 blobs — normalized to []. */
   members?: Member[]
+  /** Drip streams opened by the parent (weights mirror on-chain shares). */
+  streams?: Array<{ id: string; recipients: Array<{ address: string; share: string }>; amount: string; ratePerSec: string; openedAt: string }>
 }
 
 export const EMPTY_BOARD: Board = { chores: [], approvals: [], notices: [], members: [] } // treat as immutable
@@ -127,6 +129,7 @@ function validateShape(v: unknown): Board {
   const board = v as Board
   // v1 blobs predate members and per-chore state — normalize forward.
   board.members ??= []
+  board.streams ??= []
   for (const c of board.chores) {
     ;(c as Chore).reward ??= '0'
     ;(c as Chore).state ??= 'todo'

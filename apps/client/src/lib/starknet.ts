@@ -1,5 +1,5 @@
 import { RpcProvider } from 'starknet'
-import { chainName, rpcUrlForChain, strkTokenForChain } from './chains'
+import { chainName, rpcUrlForChain, strkTokenForChain, dripsAddressForChain } from './chains'
 
 export { chainName }
 
@@ -10,6 +10,10 @@ export function rpcUrlFor(chainId: string): string | null {
 
 export function strkToken(chainId: string): string | null {
   return strkTokenForChain(import.meta.env as Record<string, string | undefined>, chainId)
+}
+
+export function dripsAddress(chainId: string): string | null {
+  return dripsAddressForChain(import.meta.env as Record<string, string | undefined>, chainId)
 }
 
 const providers = new Map<string, RpcProvider>()

@@ -22,6 +22,15 @@ export function strkTokenForChain(
   return env[`VITE_STRK_TOKEN_${suffix}`] || STRK_TOKENS[chainId] || null
 }
 
+/** Deployed drips contract per chain — deployments env pattern, no defaults. */
+export function dripsAddressForChain(
+  env: Record<string, string | undefined>,
+  chainId: string,
+): string | null {
+  const suffix = chainName(chainId).toUpperCase().replace(/[^A-Z]/g, '_')
+  return env[`VITE_DRIPS_ADDRESS_${suffix}`] || null
+}
+
 /** Human name for a raw chainId; falls back to the raw value for unknown chains. */
 export function chainName(chainId: string): string {
   return CHAIN_NAMES[chainId] ?? chainId

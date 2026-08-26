@@ -10,14 +10,21 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AllowanceRouteImport } from './routes/allowance'
 import { Route as ChoresRouteImport } from './routes/chores'
 import { Route as PotRouteImport } from './routes/pot'
+import { Route as StashRouteImport } from './routes/stash'
 import { Route as DevBoardRouteImport } from './routes/dev.board'
 import { Route as DevMoneyRouteImport } from './routes/dev.money'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AllowanceRoute = AllowanceRouteImport.update({
+  id: '/allowance',
+  path: '/allowance',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ChoresRoute = ChoresRouteImport.update({
@@ -28,6 +35,11 @@ const ChoresRoute = ChoresRouteImport.update({
 const PotRoute = PotRouteImport.update({
   id: '/pot',
   path: '/pot',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StashRoute = StashRouteImport.update({
+  id: '/stash',
+  path: '/stash',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DevBoardRoute = DevBoardRouteImport.update({
@@ -43,38 +55,68 @@ const DevMoneyRoute = DevMoneyRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/allowance': typeof AllowanceRoute
   '/chores': typeof ChoresRoute
   '/pot': typeof PotRoute
+  '/stash': typeof StashRoute
   '/dev/board': typeof DevBoardRoute
   '/dev/money': typeof DevMoneyRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/allowance': typeof AllowanceRoute
   '/chores': typeof ChoresRoute
   '/pot': typeof PotRoute
+  '/stash': typeof StashRoute
   '/dev/board': typeof DevBoardRoute
   '/dev/money': typeof DevMoneyRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/allowance': typeof AllowanceRoute
   '/chores': typeof ChoresRoute
   '/pot': typeof PotRoute
+  '/stash': typeof StashRoute
   '/dev/board': typeof DevBoardRoute
   '/dev/money': typeof DevMoneyRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/chores' | '/pot' | '/dev/board' | '/dev/money'
+  fullPaths:
+    | '/'
+    | '/allowance'
+    | '/chores'
+    | '/pot'
+    | '/stash'
+    | '/dev/board'
+    | '/dev/money'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/chores' | '/pot' | '/dev/board' | '/dev/money'
-  id: '__root__' | '/' | '/chores' | '/pot' | '/dev/board' | '/dev/money'
+  to:
+    | '/'
+    | '/allowance'
+    | '/chores'
+    | '/pot'
+    | '/stash'
+    | '/dev/board'
+    | '/dev/money'
+  id:
+    | '__root__'
+    | '/'
+    | '/allowance'
+    | '/chores'
+    | '/pot'
+    | '/stash'
+    | '/dev/board'
+    | '/dev/money'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AllowanceRoute: typeof AllowanceRoute
   ChoresRoute: typeof ChoresRoute
   PotRoute: typeof PotRoute
+  StashRoute: typeof StashRoute
   DevBoardRoute: typeof DevBoardRoute
   DevMoneyRoute: typeof DevMoneyRoute
 }
@@ -86,6 +128,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/allowance': {
+      id: '/allowance'
+      path: '/allowance'
+      fullPath: '/allowance'
+      preLoaderRoute: typeof AllowanceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/chores': {
@@ -100,6 +149,13 @@ declare module '@tanstack/react-router' {
       path: '/pot'
       fullPath: '/pot'
       preLoaderRoute: typeof PotRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/stash': {
+      id: '/stash'
+      path: '/stash'
+      fullPath: '/stash'
+      preLoaderRoute: typeof StashRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dev/board': {
@@ -121,8 +177,10 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AllowanceRoute: AllowanceRoute,
   ChoresRoute: ChoresRoute,
   PotRoute: PotRoute,
+  StashRoute: StashRoute,
   DevBoardRoute: DevBoardRoute,
   DevMoneyRoute: DevMoneyRoute,
 }
