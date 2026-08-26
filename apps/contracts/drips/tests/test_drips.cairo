@@ -250,3 +250,144 @@ fn unauthorized_close_reverts() {
     start_cheat_caller_address(drips.contract_address, addr(0xdead));
     drips.close();
 }
+
+// ───────────── splits v1: multi-recipient
+// ─────────────
+
+fn r1() -> ContractAddress {
+    addr(0x111)
+}
+fn r2() -> ContractAddress {
+    addr(0x222)
+}
+fn r3() -> ContractAddress {
+    addr(0x333)
+}
+
+/// Uneven split summing exactly: 7:3 of rate 10, amount 100.
+#[test]
+fn uneven_split_exact_payout() {
+    let (_token, drips) = setup(100);
+    start_cheat_block_timestamp(drips.contract_address, 0);
+    start_cheat_caller_address(drips.contract_address, sender());
+    let mut recips = array![(r1(), 7_u128), (r2(), 3_u128)];
+    drips.open_stream_split(recips.span(), 10, 100);
+    stop_cheat_caller_address(drips.contract_address);
+
+    // Dry at t=10: entitlements floor(100*7/10)=70, floor(100*3/10)=30.
+    start_cheat_block_timestamp(drips.contract_address, 11);
+    assert(drips.claim_as(r1()) == 70, 'first slice exact');
+    assert(drips.claim_as(r2()) == 30, 'second slice exact');
+}
+
+#[test]
+#[should_panic(expected: ('no active stream',))]
+fn drained_split_slot_freed() {
+    let (_token, drips) = setup(100);
+    start_cheat_block_timestamp(drips.contract_address, 0);
+    start_cheat_caller_address(drips.contract_address, sender());
+    let mut recips = array![(r1(), 7_u128), (r2(), 3_u128)];
+    drips.open_stream_split(recips.span(), 10, 100);
+    stop_cheat_caller_address(drips.contract_address);
+
+    start_cheat_block_timestamp(drips.contract_address, 11);
+    drips.claim_as(r1());
+    drips.claim_as(r2());
+    drips.claim_as(r1());
+}
+
+/// Floor dust goes to the last settled claimer: 3 equal slices of 100 pay
+/// 33 + 33 + (33 + 1 swept).
+#[test]
+fn dust_swept_by_last_claimer() {
+    let (token, drips) = setup(100);
+    start_cheat_block_timestamp(drips.contract_address, 0);
+    start_cheat_caller_address(drips.contract_address, sender());
+    let mut recips = array![(r1(), 3_u128), (r2(), 3_u128), (r3(), 3_u128)];
+    drips.open_stream_split(recips.span(), 10, 100);
+    stop_cheat_caller_address(drips.contract_address);
+
+    start_cheat_block_timestamp(drips.contract_address, 11);
+    assert(drips.claim_as(r1()) == 33, 'slice 1 floor');
+    assert(drips.claim_as(r2()) == 33, 'slice 2 floor');
+    assert(drips.claim_as(r3()) == 34, 'slice 3 sweeps remainder');
+    assert(token.balance_of(r1()) == 33 && token.balance_of(r2()) == 33, 'on-chain');
+    assert(token.balance_of(r3()) == 34, 'on-chain sweep');
+}
+
+/// Claiming one slice leaves siblings untouched; a repeat claim without new
+/// time has nothing to pay.
+#[test]
+fn sibling_claims_are_isolated() {
+    let (_token, drips) = setup(100);
+    start_cheat_block_timestamp(drips.contract_address, 0);
+    start_cheat_caller_address(drips.contract_address, sender());
+    let mut recips = array![(r1(), 7_u128), (r2(), 3_u128)];
+    drips.open_stream_split(recips.span(), 10, 100);
+    stop_cheat_caller_address(drips.contract_address);
+
+    // t=5: pool accrued 500... wait, rate 10 * 5s = 50 total.
+    start_cheat_block_timestamp(drips.contract_address, 5);
+    assert(drips.claim_as(r1()) == 35, 'mid-stream slice floor(50*7/10)');
+    // r2's slice is unaffected by r1's claim.
+    assert(drips.accrued_at(5) == 50, 'pool unchanged');
+    assert(drips.claim_as(r2()) == 15, 'mid-stream slice floor(50*3/10)');
+}
+
+#[test]
+#[should_panic(expected: ('nothing to claim',))]
+fn split_reclaim_without_time_panics() {
+    let (_token, drips) = setup(100);
+    start_cheat_block_timestamp(drips.contract_address, 0);
+    start_cheat_caller_address(drips.contract_address, sender());
+    let mut recips = array![(r1(), 7_u128), (r2(), 3_u128)];
+    drips.open_stream_split(recips.span(), 10, 100);
+    stop_cheat_caller_address(drips.contract_address);
+
+    start_cheat_block_timestamp(drips.contract_address, 5);
+    drips.claim_as(r1());
+    drips.claim_as(r1());
+}
+
+#[test]
+#[should_panic(expected: ('share must be positive',))]
+fn zero_share_rejected() {
+    let (_token, drips) = setup(100);
+    start_cheat_block_timestamp(drips.contract_address, 0);
+    start_cheat_caller_address(drips.contract_address, sender());
+    let mut recips = array![(r1(), 7_u128), (r2(), 0_u128)];
+    drips.open_stream_split(recips.span(), 10, 100);
+}
+
+#[test]
+#[should_panic(expected: ('duplicate recipient',))]
+fn duplicate_recipient_rejected() {
+    let (_token, drips) = setup(100);
+    start_cheat_block_timestamp(drips.contract_address, 0);
+    start_cheat_caller_address(drips.contract_address, sender());
+    let mut recips = array![(r1(), 7_u128), (r1(), 3_u128)];
+    drips.open_stream_split(recips.span(), 10, 100);
+}
+
+#[test]
+#[should_panic(expected: ('recipients required',))]
+fn empty_recipient_list_rejected() {
+    let (_token, drips) = setup(100);
+    start_cheat_block_timestamp(drips.contract_address, 0);
+    start_cheat_caller_address(drips.contract_address, sender());
+    let mut recips = array![];
+    drips.open_stream_split(recips.span(), 10, 100);
+}
+
+#[test]
+#[should_panic(expected: ('not a recipient',))]
+fn claim_as_non_recipient_reverts() {
+    let (_token, drips) = setup(100);
+    start_cheat_block_timestamp(drips.contract_address, 0);
+    start_cheat_caller_address(drips.contract_address, sender());
+    let mut recips = array![(r1(), 7_u128), (r2(), 3_u128)];
+    drips.open_stream_split(recips.span(), 10, 100);
+    stop_cheat_caller_address(drips.contract_address);
+
+    drips.claim_as(recipient()); // never in any split list
+}

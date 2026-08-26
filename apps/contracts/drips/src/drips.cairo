@@ -17,13 +17,23 @@ pub trait IDrips<TState> {
     fn pause(ref self: TState);
     fn resume(ref self: TState);
     fn close(ref self: TState);
+    fn open_stream_split(
+        ref self: TState,
+        recipients: Span<(ContractAddress, u128)>,
+        rate_per_sec: u128,
+        amount: u256,
+    ) -> u256;
+    fn claim_as(ref self: TState, who: ContractAddress) -> u256;
 }
 
 #[starknet::contract]
 pub mod Drips {
     use core::num::traits::{SaturatingAdd, SaturatingSub};
     use core::traits::TryInto;
-    use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
+    use starknet::storage::{
+        Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
+        StoragePointerWriteAccess,
+    };
     use starknet::{ContractAddress, get_block_timestamp, get_caller_address, get_contract_address};
 
     #[starknet::interface]
@@ -34,6 +44,16 @@ pub mod Drips {
         fn transfer(ref self: TState, recipient: ContractAddress, amount: u256) -> bool;
     }
 
+    #[derive(Drop, starknet::Event)]
+    pub struct SplitOpened {
+        pub sender: ContractAddress,
+        pub rate_per_sec: u128,
+        pub amount: u256,
+        pub start: u64,
+        pub end: u64,
+        pub num: u32,
+    }
+
     #[event]
     #[derive(Drop, starknet::Event)]
     pub enum Event {
@@ -42,6 +62,7 @@ pub mod Drips {
         Paused: Paused,
         Resumed: Resumed,
         StreamClosed: StreamClosed,
+        SplitOpened: SplitOpened,
     }
 
     #[derive(Drop, starknet::Event)]
@@ -76,7 +97,13 @@ pub mod Drips {
     struct Storage {
         token: ContractAddress,
         sender: ContractAddress,
-        recipient: ContractAddress,
+        // splits v1: flat recipient list with weights
+        recipient_list: Map<u32, ContractAddress>,
+        shares: Map<ContractAddress, u128>,
+        claimed_by: Map<ContractAddress, u256>,
+        num_recipients: u32,
+        wps: u256, // Σ shares
+        settled_count: u32,
         rate_per_sec: u128,
         start: u64,
         end: u64,
@@ -130,23 +157,94 @@ pub mod Drips {
                 accrued
             }
         }
+
+        /// Shared payout: everything `who` has accrued-but-unclaimed. When
+        /// they are the last settled claimer after dry-out, sweep the pool
+        /// remainder and free the slot.
+        fn claim_as_impl(ref self: ContractState, who: ContractAddress) -> u256 {
+            let share = self.shares.read(who);
+            assert(share > 0, 'not a recipient');
+
+            let total = self.accrued_impl(get_block_timestamp());
+            let entitlement = total * share.into() / self.wps.read();
+            let amount = entitlement - self.claimed_by.read(who);
+            assert(amount > 0, 'nothing to claim');
+
+            let now_ = get_block_timestamp();
+            // checks-effects-interactions: all writes before the transfer
+            self.claimed_by.write(who, entitlement);
+            self.claimed_total.write(self.claimed_total.read() + amount);
+
+            let mut sweep: u256 = 0;
+            if now_ >= self.end.read() && total == self.deposited.read() {
+                self.settled_count.write(self.settled_count.read() + 1);
+                if self.settled_count.read() == self.num_recipients.read() {
+                    // last settled claimer sweeps the floor dust
+                    sweep = self.deposited.read() - self.claimed_total.read();
+                    self.claimed_total.write(self.deposited.read());
+                    self.active.write(false); // auto-reopen: slot freed
+                }
+            }
+
+            IERC20Dispatcher { contract_address: self.token.read() }.transfer(who, amount + sweep);
+            self.emit(Event::Claimed(Claimed { recipient: who, amount: amount + sweep }));
+            amount + sweep
+        }
     }
 
     // ───────────── external ─────────────
 
     #[abi(embed_v0)]
     impl DripsImpl of super::IDrips<ContractState> {
-        /// Open the single stream: pull `amount` of the native token from the
-        /// caller (needs prior approval) and let it flow to `recipient` at
-        /// `rate_per_sec` until it runs dry at `start + amount/rate`.
+        /// Sugar over `open_stream_split` with a single (recipient, 1) share.
         fn open_stream(
             ref self: ContractState, recipient: ContractAddress, rate_per_sec: u128, amount: u256,
+        ) -> u256 {
+            let mut single = array![(recipient, 1_u128)];
+            self.open_stream_split(single.span(), rate_per_sec, amount)
+        }
+
+        /// Open a stream splitting `amount` across weighted recipients.
+        /// Entitlement of recipient i at time t:
+        ///   floor(accrued_total(t) · share_i / WPS),  WPS = Σ shares
+        /// Once dry (t ≥ end): floor(deposited · share_i / WPS).
+        /// Floor dust (deposit − Σ floors) is swept by the last settled
+        /// claimer after dry-out; the slot then frees itself.
+        fn open_stream_split(
+            ref self: ContractState,
+            recipients: Span<(ContractAddress, u128)>,
+            rate_per_sec: u128,
+            amount: u256,
         ) -> u256 {
             assert(!self.active.read(), 'stream already open');
             assert(rate_per_sec > 0, 'rate must be positive');
             assert(amount > 0, 'amount must be positive');
+            assert(recipients.len() > 0, 'recipients required');
+
+            // Clear stale per-recipient state from the previous stream first.
+            let old_count = self.num_recipients.read();
+            let mut i = 0;
+            while i < old_count {
+                let prev = self.recipient_list.read(i);
+                self.shares.write(prev, 0);
+                self.claimed_by.write(prev, 0);
+                i += 1;
+            }
+
             let zero: ContractAddress = TryInto::try_into(0).unwrap();
-            assert(recipient != zero, 'recipient required');
+            let mut wps: u256 = 0;
+            let mut j: u32 = 0;
+            while j < recipients.len() {
+                let (addr, share) = *recipients.at(j);
+                assert(share > 0, 'share must be positive');
+                assert(addr != zero, 'recipient required');
+                assert(self.shares.read(addr) == 0, 'duplicate recipient');
+                self.recipient_list.write(j, addr);
+                self.shares.write(addr, share);
+                self.claimed_by.write(addr, 0);
+                wps += share.into();
+                j += 1;
+            }
 
             let sender = get_caller_address();
             let dispatcher = IERC20Dispatcher { contract_address: self.token.read() };
@@ -161,7 +259,6 @@ pub mod Drips {
             let end = now_.saturating_add(duration);
 
             self.sender.write(sender);
-            self.recipient.write(recipient);
             self.rate_per_sec.write(rate_per_sec);
             self.start.write(now_);
             self.end.write(end);
@@ -169,11 +266,14 @@ pub mod Drips {
             self.claimed_total.write(0);
             self.active.write(true);
             self.paused.write(false);
+            self.num_recipients.write(recipients.len());
+            self.wps.write(wps);
+            self.settled_count.write(0);
 
             self
                 .emit(
-                    Event::StreamOpened(
-                        StreamOpened { sender, recipient, rate_per_sec, amount, start: now_, end },
+                    Event::SplitOpened(
+                        SplitOpened { sender, rate_per_sec, amount, start: now_, end, num: j },
                     ),
                 );
             amount
@@ -184,26 +284,19 @@ pub mod Drips {
             self.accrued_impl(t)
         }
 
-        /// Pay out everything accrued but unclaimed. When the final claim
-        /// drains the deposit (auto-reopen model), the slot is freed so a new
-        /// `open_stream` needs no separate close tx.
+        /// Legacy sugar: claims for the sole recipient of an N=1 stream.
         fn claim(ref self: ContractState) -> u256 {
             assert(self.active.read(), 'no active stream');
+            assert(self.num_recipients.read() == 1, 'use claim_as');
+            self.claim_as_impl(self.recipient_list.read(0))
+        }
 
-            let recipient = self.recipient.read();
-            let total = self.accrued_impl(get_block_timestamp());
-            let amount = total - self.claimed_total.read();
-            assert(amount > 0, 'nothing to claim');
-
-            // checks-effects-interactions: write before transfer
-            self.claimed_total.write(total);
-            if total == self.deposited.read() {
-                self.active.write(false);
-            }
-            IERC20Dispatcher { contract_address: self.token.read() }.transfer(recipient, amount);
-
-            self.emit(Event::Claimed(Claimed { recipient, amount }));
-            amount
+        /// Permissionless: pay `who` everything accrued-but-unclaimed on their
+        /// slice. When they are the last settled claimer after dry-out they
+        /// also sweep the pool remainder and the slot frees itself.
+        fn claim_as(ref self: ContractState, who: ContractAddress) -> u256 {
+            assert(self.active.read(), 'no active stream');
+            self.claim_as_impl(who)
         }
 
         /// Freeze accrual at pause-time. Sender-only.
@@ -238,7 +331,7 @@ pub mod Drips {
         /// nothing). Sender or recipient only.
         fn close(ref self: ContractState) {
             let caller = get_caller_address();
-            assert(caller == self.sender.read() || caller == self.recipient.read(), 'unauthorized');
+            assert(caller == self.sender.read() || self.shares.read(caller) > 0, 'unauthorized');
             assert(self.active.read(), 'no active stream');
             assert(get_block_timestamp() >= self.end.read(), 'not drained');
 
