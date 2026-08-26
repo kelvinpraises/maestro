@@ -87,7 +87,8 @@ else
 		echo "+ sncast -p $PROFILE declare --contract-name Drips"
 	else
 		set +e
-		DECLARE_OUT="$(sncast -p "$PROFILE" declare --contract-name Drips 2>&1)" # F2/F3 surface here
+		DECLARE_OUT="$(sncast -p "$PROFILE" declare --contract-name Drips --max-fee 50000000000000000 2>&1)" # F2/F3 surface here
+		# already-declared panics inside fee estimation; recover the hash from the panic text
 		DECLARE_EXIT=$?
 		set -e
 		echo "$DECLARE_OUT"
@@ -96,6 +97,7 @@ else
 		# error message (both contain it).
 		NEW_HASH="$(grep -Eo 'class_hash:[[:space:]]*0x[0-9a-fA-F]+' <<<"$DECLARE_OUT" |
 			head -1 | grep -Eo '0x[0-9a-fA-F]+' || true)"
+		[[ -z "$NEW_HASH" ]] && NEW_HASH="$(grep -Eo 'Class with hash 0x[0-9a-fA-F]+' <<<"$DECLARE_OUT" | grep -Eo '0x[0-9a-fA-F]+' | head -1 || true)"
 		if [[ -n "$NEW_HASH" ]]; then
 			CLASS_HASH="$NEW_HASH"
 		elif [[ "$DECLARE_EXIT" -ne 0 ]]; then
