@@ -3,7 +3,7 @@ import { disconnect as gsDisconnect, connect as gsConnect } from 'get-starknet'
 import { StarknetInjectedWallet } from '@starknet-io/get-starknet-wallet-standard-v6'
 import { WalletAccountV6 } from 'starknet'
 import { providerForChain, chainName, trimAddress } from '#/lib/starknet'
-
+import { setWallet } from '#/lib/walletStore'
 // Connect button: detect Argent/Braavos via get-starknet, connect through
 // WalletAccountV6, show trimmed address + chain-derived network badge.
 export function WalletButton() {
@@ -58,6 +58,7 @@ export function WalletButton() {
       const acct = await WalletAccountV6.connect(p, w)
       setAccount(acct)
       setSwo(swo)
+      setWallet({ account: acct, chainId: cid ?? null })
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -70,6 +71,7 @@ export function WalletButton() {
     setAccount(null)
     setSwo(null)
     setChainId(null)
+    setWallet({ account: null, chainId: null })
   }
 
   if (account) {
