@@ -105,7 +105,7 @@ pass "approve($AMOUNT raw)"
 echo "== step 2: open_stream_split =="
 OUT="$(sncast -p "$PROFILE" -j --wait invoke --contract-address "$DRIPS_ADDRESS" \
 	--function open_stream_split \
-	--calldata 2 "$R1" "$SHARE1" "$R2" "$SHARE2" "$RATE" "$ZERO_HI" "$AMOUNT" "$ZERO_HI" 2>&1)" ||
+	--calldata 2 "$R1" "$SHARE1" "$R2" "$SHARE2" "$RATE" "$AMOUNT" "$ZERO_HI" 2>&1)" ||
 	die "open_stream_split rejected: $OUT"
 OPEN_TX="$(grep -Eo '"transaction_hash": "[^"]+"' <<<"$OUT" | sed 's/.*: "//;s/"//' | head -1)"
 pass "stream opened (tx $OPEN_TX), dry in ${DURATION}s"
