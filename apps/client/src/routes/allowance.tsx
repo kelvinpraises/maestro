@@ -42,8 +42,10 @@ function Allowance() {
     if (!drips) return log(`ERROR: no drips contract deployed/configured for ${chainName(chainId)} (set VITE_DRIPS_ADDRESS_${chainName(chainId).toUpperCase()}).`)
     const token = strkToken(chainId)!
 
+    // Pay the kid's CURRENT allowance inbox (a disposable burner), not their
+    // identity — rotating inboxes are what breaks cross-cycle linkage.
     const recipients = kids
-      .map((m) => ({ address: m.address, share: BigInt(shares[m.address] || '1') }))
+      .map((m) => ({ address: m.allowanceInbox || m.address, name: m.name, share: BigInt(shares[m.address] || '1') }))
       .filter((r) => r.share > 0n)
     if (recipients.length === 0) return log('ERROR: pick at least one kid with a positive share.')
 
@@ -84,7 +86,9 @@ function Allowance() {
         {kids.length === 0 && <p className="text-sm opacity-60">No kids registered on the board yet.</p>}
         {kids.map((m) => (
           <label key={m.address} className="flex items-center justify-between gap-2 text-sm font-bold">
-            <span className="truncate">{m.name} ({m.address.slice(0, 8)}…)</span>
+            <span className="truncate">
+              {m.name} <span className="opacity-50">({m.allowanceInbox ? `inbox ${m.allowanceInbox.slice(0, 8)}…` : `no inbox yet — pays identity`})</span>
+            </span>
             <input
               value={shares[m.address] ?? ''}
               onChange={(e) => setShares((s) => ({ ...s, [m.address]: e.target.value }))}

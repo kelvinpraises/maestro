@@ -5,8 +5,9 @@ import { useBoard } from '#/lib/useBoard'
 import { useWallet } from '#/lib/walletStore'
 import { currentRole, setRole } from '#/lib/family'
 import { scoop, accruedAt } from '#/lib/drips'
-import { providerForChain, dripsAddress, chainName } from '#/lib/starknet'
+import { providerForChain, dripsAddress, chainName, strkToken } from '#/lib/starknet'
 import { entitlement } from '#/lib/stream-math'
+import { mintBurner, exportBurner, importBurner, collectViaBurner, type Burner } from '#/lib/burners'
 
 export const Route = createFileRoute('/stash')({ component: Stash })
 
@@ -15,11 +16,51 @@ function fmtFelt18(felt: bigint): string {
 }
 
 function Stash() {
-  const { board } = useBoard()
+  const { board, mutate } = useBoard()
   const { account, chainId } = useWallet()
   const [out, setOut] = useState('')
   const [busy, setBusy] = useState(false)
   const log = (l: string) => setOut((o) => `${o}\n${l}`)
+  const BKEY = 'maestro.allowanceBurner'
+
+  function loadBurner(): Burner | null {
+    try {
+      const code = localStorage.getItem(BKEY)
+      if (!code) return null
+      const b = importBurner(code)
+      return 'error' in b ? null : b
+    } catch { return null }
+  }
+  const burner = loadBurner()
+
+  function newInbox() {
+    const b = mintBurner()
+    localStorage.setItem(BKEY, exportBurner(b))
+    void mutate((bd) => {
+      const me = bd.members?.find((m) => m.role === 'kid' && m.address === account?.address)
+      if (me) me.allowanceInbox = b.address
+    })
+    setOut(`new allowance inbox ready:\n${b.address}\n\n(back it up once — it's how this cycle's stream finds you)`)
+  }
+
+  async function collect() {
+    if (!account || !chainId || !burner) return
+    const drips = dripsAddress(chainId)
+    if (!drips) return log(`ERROR: no drips contract configured for ${chainName(chainId)}.`)
+    const token = strkToken(chainId)
+    if (!token) return log('ERROR: no STRK token configured.')
+    setBusy(true)
+    try {
+      const r = await collectViaBurner(account as WalletAccountV6, burner, drips, token)
+      if (r.balanceAfterScoop === 0n) log('nothing accrued at the inbox yet — check back later.')
+      else log(`collected ✓ scooped tx ${r.scoopedHash}\n${Number(r.balanceAfterScoop * 1000n / 10n ** 18n) / 1000} STRK reminted into your shielded stash. Inbox rotated.`)
+      // rotate: burn the used inbox, mint a fresh one
+      localStorage.removeItem(BKEY)
+      newInbox()
+    } catch (e) {
+      log(`ERROR: ${e instanceof Error ? e.message : String(e)}`)
+    } finally { setBusy(false) }
+  }
 
   if (currentRole() !== 'kid') {
     return (
@@ -95,11 +136,15 @@ function Stash() {
               Allowance drips every couple of seconds into your private stash. Scooping pulls your slice straight into this wallet.
             </p>
             <div className="flex gap-2">
+              <button onClick={newInbox} className="btn-pop">{burner ? 'Rotate inbox' : 'New allowance inbox'}</button>
               <button onClick={() => void refreshAccrual()} disabled={busy} className="rounded-full border-2 border-[var(--m-ink)] px-4 py-1.5 text-sm font-extrabold" style={{ background: 'var(--m-lavender)' }}>
                 Check accrual
               </button>
               <button onClick={() => void doScoop()} disabled={busy} className="btn-pop">
                 Scoop
+              </button>
+              <button onClick={() => void collect()} disabled={busy} className="btn-pop">
+                Collect via inbox
               </button>
             </div>
           </>

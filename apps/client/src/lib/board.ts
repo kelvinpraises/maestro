@@ -20,8 +20,12 @@ export interface Chore {
 export interface Member {
   name: string
   role: FamilyRole
-  /** Kid: the stash address rewards are privately transferred to. */
+  /** Kid: the stash address chore REWARDS are privately transferred to. */
   address: string
+  /** Board v4 — kid's CURRENT allowance inbox: a disposable burner address.
+   *  Rotates every collection cycle so successive streams never link.
+   *  Absent in v3 blobs — normalized to undefined; parent falls back to address. */
+  allowanceInbox?: string
 }
 
 export interface Board {

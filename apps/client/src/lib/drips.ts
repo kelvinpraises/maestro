@@ -41,3 +41,4 @@ export async function totalBalance(account: WalletAccountV6, chainId: string, to
   const priv = shielded[0] ? BigInt(shielded[0].balance) : 0n
   return public_ + priv
 }
+
