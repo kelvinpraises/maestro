@@ -11,6 +11,7 @@ import { mintBurner, exportBurner, importBurner } from '#/lib/burners'
 import { IconTile } from '@/components/atoms/icon-tile'
 import { Button } from '@/components/atoms/button'
 import { toast } from '#/lib/toast'
+import { WalletButton } from '@/components/WalletButton'
 import { chainName } from '#/lib/starknet'
 
 export const Route = createFileRoute('/me')({ component: Me })
@@ -61,13 +62,13 @@ function Me() {
         <h2 className="flex items-center gap-1.5 font-display text-lg font-extrabold">
           <WalletIcon className="size-4 text-[var(--m-blue)]" weight="duotone" /> Wallet
         </h2>
-        {account ? (
-          <p className="text-[13px] font-bold opacity-70 text-pretty">
-            Connected — money moves are signed by this wallet. Nobody sees your shielded notes but you.
-          </p>
-        ) : (
-          <p className="text-[13px] font-bold opacity-70 text-pretty">Connect a wallet in the header to claim rewards and scoops.</p>
-        )}
+        <WalletButton />
+        <WalletButton />
+        <p className="text-[13px] font-bold opacity-70 text-pretty">
+          {account
+            ? 'Money moves are signed by this wallet. Nobody sees your shielded notes but you.'
+            : 'Connect a wallet to claim rewards, scoops, and payouts. Family chores and the board work without one.'}
+        </p>
       </section>
 
       {/* Recovery code — parent gate */}
