@@ -42,3 +42,33 @@ export function IconTile({ icon: I, tint = 'neutral', size = 'md', weight = 'duo
     </span>
   )
 }
+
+export function EmojiTile({
+  emoji,
+  tint = 'neutral',
+  size = 'md',
+  bordered = false,
+  className,
+}: {
+  emoji: string
+  tint?: IconTileTint
+  size?: keyof typeof sizeStyles
+  bordered?: boolean
+  className?: string
+}) {
+  const t = tintStyles[tint]
+  const s = sizeStyles[size]
+  const emojiSize = size === 'lg' ? 'text-2xl' : size === 'sm' ? 'text-base' : 'text-xl'
+  return (
+    <span
+      className={cn(
+        'flex shrink-0 items-center justify-center',
+        s.box, t.tile, emojiSize,
+        bordered && 'border-2 border-[var(--m-ink)] shadow-[var(--m-pop-sm)]',
+        className,
+      )}
+    >
+      <span aria-hidden>{emoji}</span>
+    </span>
+  )
+}
