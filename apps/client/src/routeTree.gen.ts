@@ -12,8 +12,11 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AllowanceRouteImport } from './routes/allowance'
 import { Route as ChoresRouteImport } from './routes/chores'
+import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as FamilyRouteImport } from './routes/family'
 import { Route as GoalsRouteImport } from './routes/goals'
 import { Route as JoinRouteImport } from './routes/join'
+import { Route as MeRouteImport } from './routes/me'
 import { Route as PotRouteImport } from './routes/pot'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as StashRouteImport } from './routes/stash'
@@ -36,6 +39,16 @@ const ChoresRoute = ChoresRouteImport.update({
   path: '/chores',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FamilyRoute = FamilyRouteImport.update({
+  id: '/family',
+  path: '/family',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const GoalsRoute = GoalsRouteImport.update({
   id: '/goals',
   path: '/goals',
@@ -44,6 +57,11 @@ const GoalsRoute = GoalsRouteImport.update({
 const JoinRoute = JoinRouteImport.update({
   id: '/join',
   path: '/join',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MeRoute = MeRouteImport.update({
+  id: '/me',
+  path: '/me',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PotRoute = PotRouteImport.update({
@@ -81,8 +99,11 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/allowance': typeof AllowanceRoute
   '/chores': typeof ChoresRoute
+  '/dashboard': typeof DashboardRoute
+  '/family': typeof FamilyRoute
   '/goals': typeof GoalsRoute
   '/join': typeof JoinRoute
+  '/me': typeof MeRoute
   '/pot': typeof PotRoute
   '/setup': typeof SetupRoute
   '/stash': typeof StashRoute
@@ -94,8 +115,11 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/allowance': typeof AllowanceRoute
   '/chores': typeof ChoresRoute
+  '/dashboard': typeof DashboardRoute
+  '/family': typeof FamilyRoute
   '/goals': typeof GoalsRoute
   '/join': typeof JoinRoute
+  '/me': typeof MeRoute
   '/pot': typeof PotRoute
   '/setup': typeof SetupRoute
   '/stash': typeof StashRoute
@@ -108,8 +132,11 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/allowance': typeof AllowanceRoute
   '/chores': typeof ChoresRoute
+  '/dashboard': typeof DashboardRoute
+  '/family': typeof FamilyRoute
   '/goals': typeof GoalsRoute
   '/join': typeof JoinRoute
+  '/me': typeof MeRoute
   '/pot': typeof PotRoute
   '/setup': typeof SetupRoute
   '/stash': typeof StashRoute
@@ -123,8 +150,11 @@ export interface FileRouteTypes {
     | '/'
     | '/allowance'
     | '/chores'
+    | '/dashboard'
+    | '/family'
     | '/goals'
     | '/join'
+    | '/me'
     | '/pot'
     | '/setup'
     | '/stash'
@@ -136,8 +166,11 @@ export interface FileRouteTypes {
     | '/'
     | '/allowance'
     | '/chores'
+    | '/dashboard'
+    | '/family'
     | '/goals'
     | '/join'
+    | '/me'
     | '/pot'
     | '/setup'
     | '/stash'
@@ -149,8 +182,11 @@ export interface FileRouteTypes {
     | '/'
     | '/allowance'
     | '/chores'
+    | '/dashboard'
+    | '/family'
     | '/goals'
     | '/join'
+    | '/me'
     | '/pot'
     | '/setup'
     | '/stash'
@@ -163,8 +199,11 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AllowanceRoute: typeof AllowanceRoute
   ChoresRoute: typeof ChoresRoute
+  DashboardRoute: typeof DashboardRoute
+  FamilyRoute: typeof FamilyRoute
   GoalsRoute: typeof GoalsRoute
   JoinRoute: typeof JoinRoute
+  MeRoute: typeof MeRoute
   PotRoute: typeof PotRoute
   SetupRoute: typeof SetupRoute
   StashRoute: typeof StashRoute
@@ -196,6 +235,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChoresRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/family': {
+      id: '/family'
+      path: '/family'
+      fullPath: '/family'
+      preLoaderRoute: typeof FamilyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/goals': {
       id: '/goals'
       path: '/goals'
@@ -208,6 +261,13 @@ declare module '@tanstack/react-router' {
       path: '/join'
       fullPath: '/join'
       preLoaderRoute: typeof JoinRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/me': {
+      id: '/me'
+      path: '/me'
+      fullPath: '/me'
+      preLoaderRoute: typeof MeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/pot': {
@@ -259,8 +319,11 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AllowanceRoute: AllowanceRoute,
   ChoresRoute: ChoresRoute,
+  DashboardRoute: DashboardRoute,
+  FamilyRoute: FamilyRoute,
   GoalsRoute: GoalsRoute,
   JoinRoute: JoinRoute,
+  MeRoute: MeRoute,
   PotRoute: PotRoute,
   SetupRoute: SetupRoute,
   StashRoute: StashRoute,
