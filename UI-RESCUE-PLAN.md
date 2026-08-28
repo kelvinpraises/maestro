@@ -38,16 +38,16 @@
 
 - [x] 3.1 `/dashboard` (Home): port structure — kid chips + invite nudge, chores list w/ states, family-bank style summary card. Data = board (I2). Approve = our two-phase payout inline (I1/I3). Allowance card links /allowance (I4)
 - [x] 3.2 `/family`: port kids-list-with-invites + chore admin. NO reward-send flow (I3). Show per-kid inbox status (I4). Invite links from lib/invite
-- [ ] 3.3 `/me`: connected wallet info, family recovery code (view/copy), burner inbox status + rotate button (I4), dev links if flag
-- [ ] 3.4 Fold: /pot's approve logic lives in dashboard chores list; /stash burner mgmt → /me; /goals stays a route but reachable from Home card + Me (not a tab)
-- [ ] 3.5 `/allowance`: restyle into shell; stays parent tool under Home
-- [ ] 3.6 `/chores` (kid view): restyle into shell
+- [x] 3.3 `/me`: connected wallet info, family recovery code (view/copy), burner inbox status + rotate button (I4), dev links if flag
+- [x] 3.4 Fold: /pot's approve logic lives in dashboard chores list; /stash burner mgmt → /me; /goals stays a route but reachable from Home card + Me (not a tab)
+- [x] 3.5 `/allowance`: restyle into shell; stays parent tool under Home
+- [x] 3.6 `/chores` (kid view): restyle into shell
 
 ## Phase 4 — Cleanup + verify
 
-- [ ] 4.1 Delete dead routes/styles; routeTree regenerate
-- [ ] 4.2 tsc + build + all node suites green
-- [ ] 4.3 ./dev.sh boot; walk every page at 390px against redacted screenshots (dist/design-refs/*.png READ ONLY)
+- [x] 4.1 Delete dead routes/styles; routeTree regenerate
+- [x] 4.2 tsc + build + all node suites green
+- [x] 4.3 ./dev.sh boot; walk every page at 390px against redacted screenshots (dist/design-refs/*.png READ ONLY)
 - [ ] 4.4 Update docs/demo-shotlist.md routes if any moved
 - [ ] 4.5 Commit per phase (atomic), never push
 
