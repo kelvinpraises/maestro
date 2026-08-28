@@ -11,10 +11,10 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: 'border-2 border-[var(--m-ink)] bg-[var(--m-green)] text-[var(--primary-foreground)] shadow-[var(--m-pop)] hover:brightness-[1.03]',
+        default: 'btn-pop',
         destructive: 'border-2 border-[var(--m-ink)] bg-[var(--m-pink)] text-white shadow-[var(--m-pop)] hover:brightness-105',
-        outline: 'border-2 border-[var(--m-ink)] bg-white text-[var(--m-foreground)] shadow-[var(--m-pop)] hover:bg-[var(--m-lavender)]/50',
-        secondary: 'border-2 border-[var(--m-ink)] bg-[var(--secondary)] text-[var(--m-foreground)] shadow-[var(--m-pop)] hover:brightness-[0.99]',
+        outline: 'press-pop border-2 border-[var(--m-ink)] rounded-full bg-white text-[var(--m-foreground)] shadow-[var(--m-pop-sm)] hover:opacity-80',
+        secondary: 'press-pop border-2 border-[var(--m-ink)] rounded-full bg-[var(--m-lavender)] text-[var(--m-foreground)] shadow-[var(--m-pop-sm)]',
         ghost: 'hover:bg-[var(--m-lavender)]/70 hover:text-[var(--m-foreground)]',
         link: 'text-[var(--m-green-ink)] underline-offset-4 hover:underline rounded-md',
       },
