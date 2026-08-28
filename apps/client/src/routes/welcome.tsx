@@ -1,159 +1,100 @@
+// /welcome — the front door. Ported from maestro-redacted's welcome: piggy
+// mascot, two doors, friendly kid explainer. Adapted to the encrypted board:
+// "grown-up" → /setup (mints family + recovery code), invite → /join.
+import { createFileRoute, useNavigate, redirect } from '@tanstack/react-router'
 import { useState } from 'react'
-import { createFileRoute } from '@tanstack/react-router'
-import { useNavigate } from '@tanstack/react-router'
-import { ensureFamily, importKey } from '#/lib/board'
-import { exportRecovery, importRecovery } from '#/lib/onboarding'
+import { PiggyBankIcon, HeartHalfIcon, LinkSimpleIcon, ArrowLeftIcon, ArrowRightIcon } from '@phosphor-icons/react'
 import { setRole } from '#/lib/family'
-import { toast } from '#/lib/toast'
 
-export const Route = createFileRoute('/welcome')({ component: Welcome })
+export const Route = createFileRoute('/welcome')({
+  // If this device already has a family, the front door is behind us.
+  beforeLoad: () => {
+    if (typeof window !== 'undefined' && localStorage.getItem('maestro.board.familyId')) {
+      throw redirect({ to: '/dashboard' })
+    }
+  },
+  component: WelcomePage,
+})
 
-// First-run flow. Three doors:
-//   1. no family yet → mint → show recovery code ONCE → role choice
-//   2. parent with existing recovery code → import
-//   3. kid → paste family's ID + pick a name → members[] write via board
-function Welcome() {
-  const [mode, setMode] = useState<'start' | 'show-code' | 'import' | 'kid'>('start')
-  const [code, setCode] = useState('')
-  const [familyId, setFamilyId] = useState('')
-  const [name, setName] = useState('')
+function WelcomePage() {
   const navigate = useNavigate()
-
-  function begin() {
-    const fam = ensureFamily()
-    setFamilyId(fam.familyId)
-    setCode(exportRecovery(fam.familyId, fam.rawKey))
-    setMode('show-code')
-  }
-
-  function doImport() {
-    const r = importRecovery(code)
-    if ('error' in r) {
-      toast(r.error, 'error')
-      return
-    }
-    localStorage.setItem('maestro.board.familyId', r.familyId)
-    localStorage.setItem('maestro.board.key', r.rawKey)
-    setRole('parent')
-    toast('Family restored ✓')
-    void navigate({ to: '/pot' })
-  }
-
-  async function kidJoin() {
-    const fam = ensureFamily() // kid device still needs its own key to decrypt
-    localStorage.setItem('maestro.board.familyId', familyId.trim() || fam.familyId)
-    localStorage.setItem('maestro.board.key', fam.rawKey)
-    setRole('kid')
-    try {
-      // Wallet must be connected to know the reward address.
-      const { getWallet } = await import('#/lib/walletStore')
-      const { account } = getWallet()
-      if (!account) throw new Error('connect your wallet first (header button), then join again')
-      const key = await importKey(fam.rawKey)
-      const { save } = await import('#/lib/board')
-      const { BOARD_URL } = await import('#/lib/env')
-      const fid = localStorage.getItem('maestro.board.familyId')!
-      await save(BOARD_URL, fid, key, (b) => {
-        b.members ??= []
-        const me = b.members.find((m) => m.address === account.address)
-        if (me) me.name = name.trim() || 'Kid'
-        else b.members.push({ name: name.trim() || 'Kid', role: 'kid', address: account.address })
-      })
-      toast(`Welcome, ${name.trim() || 'Kid'}! ✓`)
-      void navigate({ to: '/chores' })
-    } catch (e) {
-      toast(e instanceof Error ? e.message : String(e), 'error')
-    }
-  }
+  const [view, setView] = useState<'doors' | 'invite'>('doors')
 
   return (
-    <div className="space-y-4 py-6">
-      <h1 className="text-3xl font-extrabold">Maestro 🎹</h1>
+    <div className="flex w-full flex-col items-center gap-7 text-center">
+      {view === 'doors' ? (
+        <div className="stagger-rise flex w-full flex-col items-center gap-7">
+          <div className="flex flex-col items-center gap-5">
+            <div className="animate-float-soft flex size-28 items-center justify-center rounded-[2rem] border-2 border-[var(--m-ink)] shadow-[var(--m-pop-lg)]" style={{ background: 'var(--m-butter)' }}>
+              <PiggyBankIcon className="size-16" weight="duotone" style={{ color: 'oklch(0.55 0.14 78)' }} />
+            </div>
+            <div>
+              <h1 className="font-display text-[2.6rem] font-extrabold leading-none tracking-tight">Maestro</h1>
+              <p className="mx-auto mt-3 max-w-[17rem] text-[15px] font-bold text-pretty opacity-70">
+                Chores your kids actually want to do, with a real stash they keep.
+              </p>
+            </div>
+          </div>
 
-      {mode === 'start' && (
-        <section className="card-pop space-y-3">
-          <p className="text-sm font-semibold">Your family's money life, private by default.</p>
-          <button onClick={begin} className="btn-pop w-full">
-            Create a family
-          </button>
-          <button onClick={() => setMode('import')} className="btn-pop w-full" style={{ background: 'var(--m-lavender)' }}>
-            I have a recovery code
-          </button>
-          <button onClick={() => setMode('kid')} className="btn-pop w-full" style={{ background: 'var(--m-gold)' }}>
-            I'm a kid joining my family
-          </button>
-        </section>
-      )}
-
-      {mode === 'show-code' && (
-        <section className="card-pop space-y-3" style={{ background: 'var(--m-gold)' }}>
-          <h2 className="label">Save this now — it's the only way back in</h2>
-          <p className="text-xs font-semibold">
-            No account, no password reset. If you lose this code and clear your browser, the family board is gone forever.
-          </p>
-          <code className="block break-all rounded-xl border-2 border-[var(--m-ink)] bg-white p-2 text-xs">{code}</code>
-          <div className="flex gap-2">
+          <div className="mt-1 flex w-full max-w-xs flex-col gap-3">
             <button
-              onClick={() => {
-                void navigator.clipboard.writeText(code).then(() => toast('Copied ✓'))
-              }}
-              className="btn-pop"
+              onClick={() => void navigate({ to: '/setup' })}
+              className="btn-pop flex w-full items-center justify-between text-[15px]"
             >
-              Copy
+              <span className="flex items-center gap-2.5">
+                <HeartHalfIcon className="size-5" weight="fill" />
+                I'm the grown-up
+              </span>
+              <ArrowRightIcon className="size-5" weight="bold" />
             </button>
-            <button onClick={() => setRole('parent')} className="btn-pop ml-auto" style={{ background: 'var(--m-lavender)' }}>
-              Skip for demo
+            <button
+              onClick={() => setView('invite')}
+              className="press-pop flex w-full items-center justify-between rounded-full border-2 border-[var(--m-ink)] bg-white py-2.5 pl-4 pr-3 text-[15px] font-extrabold"
+            >
+              <span className="flex items-center gap-2.5">
+                <LinkSimpleIcon className="size-5" weight="bold" style={{ color: 'var(--m-purple)' }} />
+                I got an invite
+              </span>
+              <ArrowRightIcon className="size-5" weight="bold" />
             </button>
           </div>
-          <button onClick={() => setMode('start')} className="w-full text-xs underline opacity-70">
-            ← back
-          </button>
-        </section>
-      )}
 
-      {mode === 'import' && (
-        <section className="card-pop space-y-3">
-          <h2 className="label">Restore from recovery code</h2>
-          <textarea
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            placeholder="maestro:v1:…"
-            className="w-full rounded-xl border-2 border-[var(--m-ink)] p-2 text-xs"
-            rows={3}
-          />
-          <button onClick={doImport} className="btn-pop w-full">
-            Restore family
-          </button>
-              <button onClick={() => setMode('start')} className="w-full text-xs underline opacity-70">
-            ← back
-          </button>
-        </section>
-      )}
+          <p className="max-w-[16rem] text-xs font-bold opacity-70 text-pretty">
+            No passwords. Your family bank is made for you in a tap.
+          </p>
+        </div>
+      ) : (
+        <div className="stagger-rise flex w-full flex-col items-center gap-7">
+          <div className="flex size-24 items-center justify-center rounded-[1.9rem] border-2 border-[var(--m-ink)] text-4xl shadow-[var(--m-pop)]" style={{ background: 'var(--m-lilac)' }}>
+            <LinkSimpleIcon weight="duotone" style={{ color: 'var(--m-purple)' }} />
+          </div>
+          <div>
+            <h1 className="font-display text-3xl font-extrabold tracking-tight">Got a family link?</h1>
+            <p className="mx-auto mt-3 max-w-xs text-[15px] font-bold opacity-70 text-pretty">
+              Ask your grown-up to send you the family link. It opens right here and pops you straight onto the team.
+            </p>
+          </div>
 
-      {mode === 'kid' && (
-        <section className="card-pop space-y-3" style={{ background: 'var(--m-gold)' }}>
-          <h2 className="label">Join your family</h2>
-          <input
-            value={familyId}
-            onChange={(e) => setFamilyId(e.target.value)}
-            placeholder="Family ID (ask a parent)"
-            className="w-full rounded-xl border-2 border-[var(--m-ink)] px-3 py-2 text-sm"
-          />
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Your name"
-            className="w-full rounded-xl border-2 border-[var(--m-ink)] px-3 py-2 text-sm"
-          />
-          <button onClick={() => void kidJoin()} className="btn-pop w-full">
-            Join
+          <div className="card-pop card-pop-sky w-full max-w-xs p-4 text-left">
+            <p className="text-microlabel" style={{ color: 'var(--m-blue)' }}>How it works</p>
+            <ol className="mt-2 space-y-1.5 text-[13.5px] font-bold opacity-80">
+              <li>1. Your grown-up taps "Invite" on their phone.</li>
+              <li>2. They send you the link (texts, chats, anywhere).</li>
+              <li>3. You tap it. Balloons, and you're on the team!</li>
+            </ol>
+          </div>
+
+          <button
+            onClick={() => setView('doors')}
+            className="press-pop flex items-center gap-2 rounded-full border-2 border-[var(--m-ink)] bg-white px-6 py-2.5 text-sm font-extrabold opacity-80"
+          >
+            <ArrowLeftIcon className="size-4" weight="bold" />
+            Back
           </button>
-          <p className="text-xs opacity-70">Connect your wallet first — your reward address comes from it.</p>
-          <button onClick={() => setMode('start')} className="w-full text-xs underline opacity-70">
-            ← back
-          </button>
-        </section>
+        </div>
       )}
+      {/* role is chosen implicitly: grown-up → setup → parent; invite → join → kid */}
+      <button hidden onClick={() => setRole('parent')} />
     </div>
   )
 }
