@@ -48,8 +48,8 @@
 - [x] 4.1 Delete dead routes/styles; routeTree regenerate
 - [x] 4.2 tsc + build + all node suites green
 - [x] 4.3 ./dev.sh boot; walk every page at 390px against redacted screenshots (dist/design-refs/*.png READ ONLY)
-- [ ] 4.4 Update docs/demo-shotlist.md routes if any moved
-- [ ] 4.5 Commit per phase (atomic), never push
+- [x] 4.4 Update docs/demo-shotlist.md routes if any moved
+- [x] 4.5 Commit per phase (atomic), never push
 
 ## Rules for this work
 
