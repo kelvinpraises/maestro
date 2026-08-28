@@ -4,7 +4,6 @@ import { StarknetInjectedWallet } from '@starknet-io/get-starknet-wallet-standar
 import { WalletAccountV6 } from 'starknet'
 import { providerForChain, chainName, trimAddress } from '#/lib/starknet'
 import { setWallet } from '#/lib/walletStore'
-import { Button } from '@/components/atoms/button'
 // Connect button: detect Argent/Braavos via get-starknet, connect through
 // WalletAccountV6, show trimmed address + chain-derived network badge.
 export function WalletButton() {
@@ -84,16 +83,16 @@ export function WalletButton() {
           </span>
           <code className="field-pop px-2.5 py-1 text-xs font-bold">{trimAddress(account.address)}</code>
         </div>
-        <Button variant="outline" size="sm" onClick={disconnectWallet}>Disconnect</Button>
+        <button onClick={disconnectWallet} className="btn-pop w-full" style={{ background: 'var(--m-lavender)', color: 'var(--m-foreground)' }}>Disconnect</button>
       </div>
     )
   }
 
   return (
     <div className="flex w-full flex-col gap-2">
-      <Button size="lg" onClick={connectWallet} disabled={connecting} className="w-full">
+      <button onClick={connectWallet} disabled={connecting} className="btn-pop w-full">
         {connecting ? 'Connecting…' : 'Connect wallet'}
-      </Button>
+      </button>
       {error && <p className="text-xs font-bold text-[var(--m-pink)]">{error}</p>}
     </div>
   )
