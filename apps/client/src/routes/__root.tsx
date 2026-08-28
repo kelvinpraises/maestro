@@ -19,7 +19,7 @@ function RootComponent() {
     <>
       <header className="mx-auto flex max-w-[390px] items-center justify-between px-4 py-3">
         <div className="flex items-center gap-2">
-          <a href="/pot" className="font-display text-lg font-extrabold">Maestro</a>
+          <a href="/" className="font-display text-lg font-extrabold">{useBoard().board?.familyName || 'Maestro'}</a>
           {syncing && (
             <span className="animate-pulse rounded-full border-2 border-[var(--m-ink)] bg-[var(--m-gold)] px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider">
               syncing…

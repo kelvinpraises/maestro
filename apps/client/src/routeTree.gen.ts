@@ -13,7 +13,9 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AllowanceRouteImport } from './routes/allowance'
 import { Route as ChoresRouteImport } from './routes/chores'
 import { Route as GoalsRouteImport } from './routes/goals'
+import { Route as JoinRouteImport } from './routes/join'
 import { Route as PotRouteImport } from './routes/pot'
+import { Route as SetupRouteImport } from './routes/setup'
 import { Route as StashRouteImport } from './routes/stash'
 import { Route as WelcomeRouteImport } from './routes/welcome'
 import { Route as DevBoardRouteImport } from './routes/dev.board'
@@ -39,9 +41,19 @@ const GoalsRoute = GoalsRouteImport.update({
   path: '/goals',
   getParentRoute: () => rootRouteImport,
 } as any)
+const JoinRoute = JoinRouteImport.update({
+  id: '/join',
+  path: '/join',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PotRoute = PotRouteImport.update({
   id: '/pot',
   path: '/pot',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SetupRoute = SetupRouteImport.update({
+  id: '/setup',
+  path: '/setup',
   getParentRoute: () => rootRouteImport,
 } as any)
 const StashRoute = StashRouteImport.update({
@@ -70,7 +82,9 @@ export interface FileRoutesByFullPath {
   '/allowance': typeof AllowanceRoute
   '/chores': typeof ChoresRoute
   '/goals': typeof GoalsRoute
+  '/join': typeof JoinRoute
   '/pot': typeof PotRoute
+  '/setup': typeof SetupRoute
   '/stash': typeof StashRoute
   '/welcome': typeof WelcomeRoute
   '/dev/board': typeof DevBoardRoute
@@ -81,7 +95,9 @@ export interface FileRoutesByTo {
   '/allowance': typeof AllowanceRoute
   '/chores': typeof ChoresRoute
   '/goals': typeof GoalsRoute
+  '/join': typeof JoinRoute
   '/pot': typeof PotRoute
+  '/setup': typeof SetupRoute
   '/stash': typeof StashRoute
   '/welcome': typeof WelcomeRoute
   '/dev/board': typeof DevBoardRoute
@@ -93,7 +109,9 @@ export interface FileRoutesById {
   '/allowance': typeof AllowanceRoute
   '/chores': typeof ChoresRoute
   '/goals': typeof GoalsRoute
+  '/join': typeof JoinRoute
   '/pot': typeof PotRoute
+  '/setup': typeof SetupRoute
   '/stash': typeof StashRoute
   '/welcome': typeof WelcomeRoute
   '/dev/board': typeof DevBoardRoute
@@ -106,7 +124,9 @@ export interface FileRouteTypes {
     | '/allowance'
     | '/chores'
     | '/goals'
+    | '/join'
     | '/pot'
+    | '/setup'
     | '/stash'
     | '/welcome'
     | '/dev/board'
@@ -117,7 +137,9 @@ export interface FileRouteTypes {
     | '/allowance'
     | '/chores'
     | '/goals'
+    | '/join'
     | '/pot'
+    | '/setup'
     | '/stash'
     | '/welcome'
     | '/dev/board'
@@ -128,7 +150,9 @@ export interface FileRouteTypes {
     | '/allowance'
     | '/chores'
     | '/goals'
+    | '/join'
     | '/pot'
+    | '/setup'
     | '/stash'
     | '/welcome'
     | '/dev/board'
@@ -140,7 +164,9 @@ export interface RootRouteChildren {
   AllowanceRoute: typeof AllowanceRoute
   ChoresRoute: typeof ChoresRoute
   GoalsRoute: typeof GoalsRoute
+  JoinRoute: typeof JoinRoute
   PotRoute: typeof PotRoute
+  SetupRoute: typeof SetupRoute
   StashRoute: typeof StashRoute
   WelcomeRoute: typeof WelcomeRoute
   DevBoardRoute: typeof DevBoardRoute
@@ -177,11 +203,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GoalsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/join': {
+      id: '/join'
+      path: '/join'
+      fullPath: '/join'
+      preLoaderRoute: typeof JoinRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/pot': {
       id: '/pot'
       path: '/pot'
       fullPath: '/pot'
       preLoaderRoute: typeof PotRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/setup': {
+      id: '/setup'
+      path: '/setup'
+      fullPath: '/setup'
+      preLoaderRoute: typeof SetupRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/stash': {
@@ -220,7 +260,9 @@ const rootRouteChildren: RootRouteChildren = {
   AllowanceRoute: AllowanceRoute,
   ChoresRoute: ChoresRoute,
   GoalsRoute: GoalsRoute,
+  JoinRoute: JoinRoute,
   PotRoute: PotRoute,
+  SetupRoute: SetupRoute,
   StashRoute: StashRoute,
   WelcomeRoute: WelcomeRoute,
   DevBoardRoute: DevBoardRoute,

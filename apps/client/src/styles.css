@@ -1,4 +1,3 @@
-
 @import "tailwindcss";
 
 * {
@@ -15,67 +14,190 @@ body {
   margin: 0;
 }
 
+/* ── Maestro design tokens — ported verbatim from maestro-redacted ──
+   Soft-neubrutalism "card-pop" voice: warm cream canvas with dot grid,
+   white floating cards, bright grass-green primary, pastel accents. */
 :root {
-  /* Maestro palette (portable subset of the redacted app's identity): warm cream canvas, white card-pop cards, bright grass-green primary, lavender chips. */
-  --m-canvas: oklch(0.975 0.014 92);
-  --m-foreground: oklch(0.26 0.03 285);
-  --m-muted: oklch(0.52 0.03 285);
+  --background: oklch(0.975 0.014 92);
+  --foreground: oklch(0.26 0.03 285);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.26 0.03 285);
+  --primary: oklch(0.78 0.2 150);
+  --primary-foreground: oklch(0.22 0.05 155);
+  --secondary: oklch(0.955 0.015 295);
+  --muted: oklch(0.955 0.012 295);
+  --muted-foreground: oklch(0.52 0.03 285);
+  --accent: oklch(0.93 0.03 295);
+  --destructive: oklch(0.63 0.21 22);
+
+  /* the card-pop voice */
+  --m-ink: oklch(0.24 0.03 60);
+  --m-ink-soft: oklch(0.24 0.03 60 / 0.55);
+  --m-border-w: 2px;
+  --m-pop: 3px 3px 0 0 var(--m-ink);
+  --m-pop-sm: 2px 2px 0 0 var(--m-ink);
+  --m-pop-lg: 5px 5px 0 0 var(--m-ink);
+  --m-radius-pop: 1.4rem;
+
+  /* named accents */
   --m-green: oklch(0.78 0.2 150);
   --m-green-ink: oklch(0.4 0.16 152);
+  --m-blue: oklch(0.68 0.16 250);
+  --m-purple: oklch(0.62 0.21 300);
   --m-gold: oklch(0.83 0.16 88);
-  --m-lavender: oklch(0.93 0.03 295);
   --m-pink: oklch(0.8 0.13 8);
-  /* Soft-neubrutalism: one warm near-black outline + one hard offset shadow. */
-  --m-ink: oklch(0.24 0.03 60);
-  --m-pop: 3px 3px 0 0 var(--m-ink);
-  --m-radius-pop: 1.4rem;
+  --m-mint: oklch(0.92 0.09 155);
+  --m-sky: oklch(0.93 0.06 240);
+  --m-lilac: oklch(0.92 0.06 300);
+  --m-blush: oklch(0.94 0.05 5);
+  --m-butter: oklch(0.95 0.08 92);
+
+  /* fonts */
+  --font-baloo: "Baloo 2", "Fredoka", system-ui, sans-serif;
+  --font-nunito: "Nunito", system-ui, -apple-system, sans-serif;
+  --font-display: var(--font-baloo);
+  --font-sans: var(--font-nunito);
+
+  /* motion */
+  --ease-out-pop: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out-move: cubic-bezier(0.77, 0, 0.175, 1);
+  --radius: 1.25rem;
 }
 
 body {
-  background: var(--m-canvas);
-  color: var(--m-foreground);
-  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Chunky floating card — the app's one visual voice. */
+h1, h2, h3, h4 {
+  font-family: var(--font-baloo);
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+/* ── Maestro canvas: warm cream + soft dot grid ── */
+.bg-maestro-canvas {
+  background-color: oklch(0.975 0.014 92);
+  background-image:
+    radial-gradient(circle, oklch(0.62 0.05 70 / 0.14) 1.4px, transparent 1.4px),
+    radial-gradient(120% 60% at 50% -10%, oklch(0.95 0.06 95 / 0.6), transparent 70%);
+  background-size: 22px 22px, 100% 100%;
+  background-position: 0 0, center top;
+}
+
+/* ── The card-pop voice ── */
 .card-pop {
-  background: white;
-  border: 2px solid var(--m-ink);
+  border: var(--m-border-w) solid var(--m-ink);
   border-radius: var(--m-radius-pop);
   box-shadow: var(--m-pop);
+  background-color: var(--card);
+  color: var(--card-foreground);
   padding: 1rem;
+}
+.card-pop-sm { box-shadow: var(--m-pop-sm); }
+.card-pop-lg { box-shadow: var(--m-pop-lg); }
+.card-pop-butter { background-color: var(--m-butter); }
+.card-pop-mint   { background-color: var(--m-mint); }
+.card-pop-pink   { background-color: var(--m-blush); }
+.card-pop-sky    { background-color: var(--m-sky); }
+.card-pop-lilac  { background-color: var(--m-lilac); }
+.card-pop-green  { background-color: var(--m-green); color: var(--primary-foreground); }
+
+.field-pop {
+  border: var(--m-border-w) solid var(--m-ink);
+  border-radius: 1rem;
+  background-color: var(--card);
 }
 
 .btn-pop {
   background: var(--m-green);
-  color: oklch(0.22 0.05 155);
-  border: 2px solid var(--m-ink);
+  color: var(--primary-foreground);
+  border: var(--m-border-w) solid var(--m-ink);
   border-radius: 9999px;
-  box-shadow: 2px 2px 0 0 var(--m-ink);
+  box-shadow: var(--m-pop-sm);
   padding: 0.5rem 1rem;
   font-weight: 800;
+  font-family: var(--font-display);
+}
+.btn-pop:disabled { opacity: 0.5; }
+
+/* The neubrutalist press */
+.press-pop {
+  transition:
+    transform 140ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 140ms ease-out,
+    filter 140ms ease-out;
+}
+.press-pop:active {
+  transform: translate(2px, 2px) scale(0.98);
+  box-shadow: var(--m-pop-sm);
 }
 .btn-pop:active {
-  translate: 2px 2px;
-  box-shadow: none;
-}
-.btn-pop:disabled {
-  opacity: 0.5;
+  transform: translate(2px, 2px) scale(0.98);
+  box-shadow: var(--m-pop-sm);
 }
 
-
-
-/* Subtle dot grid on the canvas — the deck's playful backdrop. */
-body {
-  background-image: radial-gradient(oklch(0.85 0.03 92 / 0.9) 1px, transparent 1px);
-  background-size: 22px 22px;
+/* ── Type voices ── */
+.font-display { font-family: var(--font-display); }
+.text-money {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
 }
-
-/* Uppercase micro-label used above sections, per design refs. */
+.text-microlabel {
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
 .label {
-  font-size: 0.65rem;
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   opacity: 0.55;
+}
+
+/* Staggered entrance for card lists */
+.stagger-rise > * {
+  animation: rise-in 0.24s var(--ease-out-pop) both;
+}
+.stagger-rise > *:nth-child(1) { animation-delay: 0.04s; }
+.stagger-rise > *:nth-child(2) { animation-delay: 0.1s; }
+.stagger-rise > *:nth-child(3) { animation-delay: 0.16s; }
+.stagger-rise > *:nth-child(4) { animation-delay: 0.22s; }
+.stagger-rise > *:nth-child(5) { animation-delay: 0.28s; }
+.stagger-rise > *:nth-child(6) { animation-delay: 0.34s; }
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes pop-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+.animate-pop-in { animation: pop-in 0.24s var(--ease-out-pop) both; }
+
+@keyframes float-soft {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+.animate-float-soft { animation: float-soft 4s ease-in-out infinite; }
+
+/* Allowance drip droplet */
+@keyframes drip-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.8); }
+}
+.drip-dot { animation: drip-pulse 1.8s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .press-pop:active { transform: none; }
+  .stagger-rise > * { animation: none; }
+  .animate-pop-in, .animate-float-soft, .drip-dot { animation: none; }
 }

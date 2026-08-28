@@ -29,6 +29,8 @@ export interface Member {
 }
 
 export interface Board {
+  /** Board v4 — display name shown on every device's home screen. */
+  familyName?: string
   chores: Chore[]
   approvals: Array<{ id: string; choreId: string; at: string; txHash?: string }>
   notices: Array<{ id: string; text: string; at: string }>
