@@ -4,6 +4,7 @@ import { StarknetInjectedWallet } from '@starknet-io/get-starknet-wallet-standar
 import { WalletAccountV6 } from 'starknet'
 import { providerForChain, chainName, trimAddress } from '#/lib/starknet'
 import { setWallet } from '#/lib/walletStore'
+import { Button } from '@/components/atoms/button'
 // Connect button: detect Argent/Braavos via get-starknet, connect through
 // WalletAccountV6, show trimmed address + chain-derived network badge.
 export function WalletButton() {
@@ -76,31 +77,24 @@ export function WalletButton() {
 
   if (account) {
     return (
-      <span className="inline-flex items-center gap-2 text-sm">
-        <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-          {chainId ? chainName(chainId) : '…'}
-        </span>
-        <code>{trimAddress(account.address)}</code>
-        <button
-          onClick={disconnectWallet}
-          className="rounded border border-zinc-300 px-2 py-1 hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
-        >
-          Disconnect
-        </button>
-      </span>
+      <div className="flex w-full flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <span className="rounded-full border-2 border-[var(--m-ink)] bg-[var(--m-mint)] px-2.5 py-0.5 text-[11px] font-extrabold text-[var(--m-green-ink)]">
+            {chainId ? chainName(chainId) : '…'}
+          </span>
+          <code className="field-pop px-2.5 py-1 text-xs font-bold">{trimAddress(account.address)}</code>
+        </div>
+        <Button variant="outline" size="sm" onClick={disconnectWallet}>Disconnect</Button>
+      </div>
     )
   }
 
   return (
-    <span className="inline-flex items-center gap-2">
-      <button
-        onClick={connectWallet}
-        disabled={connecting}
-        className="rounded bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-zinc-900"
-      >
-        {connecting ? 'Connecting…' : 'Connect Wallet'}
-      </button>
-      {error && <span className="text-xs text-red-500">{error}</span>}
-    </span>
+    <div className="flex w-full flex-col gap-2">
+      <Button size="lg" onClick={connectWallet} disabled={connecting} className="w-full">
+        {connecting ? 'Connecting…' : 'Connect wallet'}
+      </Button>
+      {error && <p className="text-xs font-bold text-[var(--m-pink)]">{error}</p>}
+    </div>
   )
 }
