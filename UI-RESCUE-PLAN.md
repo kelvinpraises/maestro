@@ -37,7 +37,7 @@
 ## Phase 3 — Main screens
 
 - [x] 3.1 `/dashboard` (Home): port structure — kid chips + invite nudge, chores list w/ states, family-bank style summary card. Data = board (I2). Approve = our two-phase payout inline (I1/I3). Allowance card links /allowance (I4)
-- [ ] 3.2 `/family`: port kids-list-with-invites + chore admin. NO reward-send flow (I3). Show per-kid inbox status (I4). Invite links from lib/invite
+- [x] 3.2 `/family`: port kids-list-with-invites + chore admin. NO reward-send flow (I3). Show per-kid inbox status (I4). Invite links from lib/invite
 - [ ] 3.3 `/me`: connected wallet info, family recovery code (view/copy), burner inbox status + rotate button (I4), dev links if flag
 - [ ] 3.4 Fold: /pot's approve logic lives in dashboard chores list; /stash burner mgmt → /me; /goals stays a route but reachable from Home card + Me (not a tab)
 - [ ] 3.5 `/allowance`: restyle into shell; stays parent tool under Home
