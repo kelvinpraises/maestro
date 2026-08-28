@@ -25,7 +25,6 @@ import { ensureFamily } from '#/lib/board'
 import { exportRecovery } from '#/lib/onboarding'
 import { buildInviteLink, type InvitePayload } from '#/lib/invite'
 import { setRole } from '#/lib/family'
-import { useWallet } from '#/lib/walletStore'
 
 export const Route = createFileRoute('/setup')({
   beforeLoad: () => {
