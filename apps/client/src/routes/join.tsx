@@ -41,8 +41,8 @@ function Join() {
 
   if (invalid || !payload) {
     return (
-      <div className="space-y-4 py-10 text-center">
-        <div className="mx-auto flex size-20 items-center justify-center rounded-[1.6rem] border-2 border-[var(--m-ink)] text-4xl" style={{ background: 'var(--m-lavender)' }}>🔗</div>
+      <div className="stagger-rise space-y-4 py-10 text-center">
+        <div className="animate-float-soft mx-auto flex size-20 items-center justify-center rounded-[1.6rem] border-2 border-[var(--m-ink)] text-4xl" style={{ background: 'var(--m-lavender)' }}>🔗</div>
         <h1 className="text-3xl font-extrabold">That link didn't work</h1>
         <p className="mx-auto max-w-xs text-sm font-semibold opacity-70">
           Invite links look like <code className="text-xs">…/join#invite=…</code> and are single-purpose. Ask your grown-up to send it again.
@@ -53,14 +53,14 @@ function Join() {
   }
 
   return (
-    <div className="space-y-5 py-8 text-center">
-      <div className="mx-auto flex size-24 items-center justify-center rounded-[1.9rem] border-2 border-[var(--m-ink)] text-5xl" style={{ background: 'var(--m-lavender)' }}>🎈</div>
+    <div className="stagger-rise space-y-5 py-8 text-center">
+      <div className="animate-float-soft mx-auto flex size-24 items-center justify-center rounded-[1.9rem] border-2 border-[var(--m-ink)] text-5xl" style={{ background: 'var(--m-lilac)' }}>🎈</div>
       <h1 className="text-3xl font-extrabold">Join {payload.familyName}?</h1>
       <p className="mx-auto max-w-xs text-sm font-semibold opacity-70">
         You're joining as <b>{payload.kidName}</b>. The family's encrypted board will live on this device.
       </p>
-      <section className="card-pop mx-auto max-w-xs p-4 text-left">
-        <p className="label opacity-60">How it works</p>
+      <section className="card-pop card-pop-sky mx-auto max-w-xs p-4 text-left">
+        <p className="text-microlabel" style={{ color: "var(--m-blue)" }}>How it works</p>
         <ol className="mt-1 space-y-1 text-[13px] font-bold opacity-80">
           <li>1. Your grown-up tapped "Invite" on their phone.</li>
           <li>2. They sent you this link.</li>
