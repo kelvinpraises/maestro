@@ -74,7 +74,7 @@ function Stash() {
   }
 
   async function refreshAccrual() {
-    if (!account || !chainId) return log('ERROR: connect your wallet first.')
+    if (!account || !chainId) return log('ERROR: connect your wallet first. — Me tab → Connect wallet')
     const drips = dripsAddress(chainId)
     if (!drips) return log(`ERROR: no drips contract configured for ${chainName(chainId)}.`)
     const stream = board?.streams?.at(-1)

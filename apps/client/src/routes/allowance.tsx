@@ -37,7 +37,7 @@ function Allowance() {
   const kids = board?.members?.filter((m) => m.role === 'kid') ?? []
 
   function openStream() {
-    if (!account || !chainId) return log('ERROR: connect the parent wallet first.')
+    if (!account || !chainId) return log('ERROR: connect the parent wallet first. — Me tab → Connect wallet')
     const drips = dripsAddress(chainId)
     if (!drips) return log(`ERROR: no drips contract deployed/configured for ${chainName(chainId)} (set VITE_DRIPS_ADDRESS_${chainName(chainId).toUpperCase()}).`)
     const token = strkToken(chainId)!

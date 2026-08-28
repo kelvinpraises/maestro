@@ -247,7 +247,7 @@ function KidHome() {
   const allDone = chores.length > 0 && choresLeft === 0
 
   function claim(choreId: string) {
-    if (!account) { toast('Connect your wallet first.', 'error'); return }
+    if (!account) { toast('Connect your wallet first — Me tab → Connect wallet', 'error'); return }
     mutate((b) => claimChore(b, choreId))
   }
 
