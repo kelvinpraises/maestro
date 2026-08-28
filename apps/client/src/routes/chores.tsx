@@ -69,7 +69,7 @@ function Chores() {
 
   return (
     <div className="space-y-4 py-2">
-      <h1 className="text-2xl font-extrabold">Chores</h1>
+      <h1 className="font-display text-3xl font-extrabold tracking-tight">Chores</h1>
 
 
       {!joined && (

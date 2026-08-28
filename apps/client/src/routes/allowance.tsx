@@ -75,14 +75,15 @@ function Allowance() {
 
   return (
     <div className="space-y-4 py-2">
-      <h1 className="text-2xl font-extrabold">Allowance</h1>
+      <h1 className="font-display text-3xl font-extrabold tracking-tight">Allowance</h1>
+      <p className="mt-1 text-[15px] font-bold opacity-60 text-pretty">Streams pay each kid's disposable inbox — rotate it from the Stash screen after collecting.</p>
 
       {out.trim() && (
-        <pre className="card-pop whitespace-pre-wrap !p-3 text-xs text-red-600">{out}</pre>
+        <pre className="card-pop whitespace-pre-wrap !p-3 text-xs font-bold text-[var(--m-pink)]">{out}</pre>
       )}
 
       <section className="card-pop space-y-2">
-        <h2 className="label">Open a drip stream</h2>
+        <h2 className="text-microlabel opacity-60">Open a drip stream</h2>
         {kids.length === 0 && <p className="text-sm opacity-60">No kids registered on the board yet.</p>}
         {kids.map((m) => (
           <label key={m.address} className="flex items-center justify-between gap-2 text-sm font-bold">
