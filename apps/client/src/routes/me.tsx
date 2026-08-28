@@ -63,7 +63,6 @@ function Me() {
           <WalletIcon className="size-4 text-[var(--m-blue)]" weight="duotone" /> Wallet
         </h2>
         <WalletButton />
-        <WalletButton />
         <p className="text-[13px] font-bold opacity-70 text-pretty">
           {account
             ? 'Money moves are signed by this wallet. Nobody sees your shielded notes but you.'
