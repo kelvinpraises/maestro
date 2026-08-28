@@ -30,9 +30,9 @@
 
 - [x] 2.1 `__root.tsx`: exact redacted layout — fullscreen routes (/welcome /setup /join) render bare; everything else inside canvas column (max-w-md) + BottomNav. NO header chrome
 - [x] 2.2 BottomNav component: copy redacted's (icon tabs, press-pop, active fill), adjust `match()` to our routes: Home↔/dashboard /allowance /chores; Family↔/family; Me↔/me /stash-remnants
-- [ ] 2.3 `/welcome`: copy verbatim structure — piggy mascot tile, tagline "Chores your kids actually want to do…", two doors + kid explainer view. Grown-up→/setup, invite door→/join. (I5: no wallet prompt)
-- [ ] 2.4 `/setup`: port 3-beat flow (name family → kid name chips → starter chores w/ emoji rows + custom dialog-lite). STRK rewards (I1). Finish = ensureFamily() + board mutate (I2) writing familyName, kids (name-only, address empty), chosen chores. NEW beat 4 (I2-forced): recovery code shown once + per-kid invite links (familyId+key inside link, I2)
-- [ ] 2.5 `/join`: restyle mine with redacted's balloons + 3-step explainer card. On join: adopt familyId+key from link, role=kid, → /dashboard (I2)
+- [x] 2.3 `/welcome`: copy verbatim structure — piggy mascot tile, tagline "Chores your kids actually want to do…", two doors + kid explainer view. Grown-up→/setup, invite door→/join. (I5: no wallet prompt)
+- [x] 2.4 `/setup`: port 3-beat flow (name family → kid name chips → starter chores w/ emoji rows + custom dialog-lite). STRK rewards (I1). Finish = ensureFamily() + board mutate (I2) writing familyName, kids (name-only, address empty), chosen chores. NEW beat 4 (I2-forced): recovery code shown once + per-kid invite links (familyId+key inside link, I2)
+- [x] 2.5 `/join`: restyle mine with redacted's balloons + 3-step explainer card. On join: adopt familyId+key from link, role=kid, → /dashboard (I2)
 
 ## Phase 3 — Main screens
 
